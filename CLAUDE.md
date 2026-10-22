@@ -32,3 +32,9 @@ else the sibling checkout `../platform/packages/catalog/schemas`) and validates 
 
 Core logic lives in a documented, tested function in `om_extract/`. Notebooks and the CLI call it; they hold no logic
 of their own, so a test can assert what they run.
+
+## The values contract
+
+`om_extract/contract.py` is the one writer and validator of values files (`write_values()`, `validate_rows()` ...,
+README.md "Contract"), moved from oceanmetrics/indicators, which imports it. Its schemas are the platform's `values-row`
+and `values-provenance`; rules beyond JSON Schema live in `validate_rows()` / `validate_provenance()`, each with a test.

@@ -26,6 +26,60 @@ uv run pytest -q
 uv run om-extract --version
 ```
 
+## Contract
+
+A **values file** is the output of every indicator producer: one Parquet file per (indicator, place collection) at
+`values/indicator=<id>/coll=<slug>/data.parquet`, one row per (place, indicator, period), contract 1.2.0:
+
+| column | type | |
+|---|---|---|
+| `place_id` | string | gazetteer id, `<authority>:<source_id>` (`NMS:CINMS`, `MRGID:8371`) |
+| `coll` | string | gazetteer collection of the place (`places`, `mr_eez`) |
+| `indicator` | string | `erddap:<dataset>:<variable>:<stat>`, `cmems:<dataset>:<variable>:mean`, `sdg:<series>`, `obis:<metric>[:<eov>]` |
+| `time_grain` | string | `all`, `decade`, `year`, `month` or `day` |
+| `time` | date | first day of the period; null for `all` |
+| `class` | string | categorical indicators only: the class whose area share `value` is |
+| `value` | double | finite or null |
+| `n` | double | what the value summarises (time steps, records; see the manifest's `n_meaning`) |
+| `sd` | double | contract 1.2: the sample standard deviation (n - 1) of the layer's cell values across the place's cells at that time step, in `unit`; finite and >= 0, or null |
+| `unit` | string | |
+| `x_*` | any | optional producer columns |
+
+Each file carries its provenance (producer, the original dataset, the exact sources read, method, code version,
+created, licence and row count) as JSON in the Parquet key-value metadata under `om:provenance`. The schemas are in
+`oceanmetrics/platform`, `packages/catalog/schemas/values-row.schema.json` (one row) and
+`values-provenance.schema.json` (the provenance), read through `om_extract.schemas` like every platform schema and never
+copied here. Validator, writer and reader: [`om_extract/contract.py`](om_extract/contract.py)
+(`write_values()`, `read_values()`, `validate_rows()`, `validate_table()`, `validate_provenance()`, `validate_file()`,
+`validate_tree()`). `write_values()` validates rows and provenance and refuses to write on any error; the rules beyond
+JSON Schema (time aligned to its grain, unique keys, one indicator and coll per file, finite values, class on all rows
+or none, `sd` null where `value` is null or `n` is 0) live in `validate_rows()`, each with a test.
+
+**Contract 1.2.0** adds three things to 1.1:
+
+- **`sd`**, the tenth core column, right after `n`. It is the spread inside the place that the area-weighted `value`
+  hides. It is null where `value` is null, where `n` is 0, wherever a row summarises several time steps (an SD of
+  monthly or daily means is not the cell SD: erddap-places writes `sd` only for a month that is one time step, null for
+  daily-to-month rows and for years) and for producers with no cells (OBIS, UN SDG). Copernicus Marine rows carry the
+  spatial SD that was `x_sd` in 1.1.
+- **`dataset`** in the provenance is required: the original dataset (`id`, `title`, `providers`, `license`, `via`,
+  `doi` / `citation` when present). The erddap-places adapter states the same dataset the manifest reads from the
+  ERDDAP collection.
+- **`sources[]`** entries gain `item` (the URL of the STAC Item that describes the source file, or null) and `role`
+  (`data`, the default, `geometry`, `product` or `manifest`). At least one source has the role `data`.
+
+**1.1 files stay readable and valid.** `validate_table()` and `validate_file()` read the file's own `contract`: a 1.1.x
+file needs no `sd` column and no `dataset`, and a 1.2.x file without `sd` fails with `missing column 'sd'`. A reader
+treats a missing `sd` column as null. `write_values()` always writes 1.2.0 and fills `sd` with nulls when the rows
+carry none.
+
+```sql
+-- every SST value for every sanctuary, straight from the indicators bucket (published daily)
+SELECT place_id, time, value FROM read_parquet(
+  'https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/indicators/values/indicator=erddap:dhw_5km:CRW_SST:mean/coll=places/data.parquet')
+WHERE time_grain = 'year' ORDER BY place_id, time;
+```
+
 ## Notebooks
 
 Each workflow notebook (`*.qmd` in `oceanmetrics/workflows`) carries an `om:` block in its YAML front matter, validated

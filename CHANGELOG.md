@@ -1,3 +1,13 @@
+# om-extract 0.2.0 (2026-10-22)
+
+- New `om_extract.contract`: the values contract 1.2.0, moved from oceanmetrics/indicators `om_indicators/contract.py`
+  with every name and signature kept (`CONTRACT_VERSION`, `ARROW_SCHEMA`, `CORE`, `SD_MIN_N`, `ContractError`,
+  `period_start()`, `validate_rows()`, `validate_provenance()`, `validate_table()`, `values_path()`, `validate_file()`,
+  `validate_tree()`, `to_table()`, `write_values()`, `read_values()`, `utc_now()`), so callers change only the import.
+  Its schemas are the platform's `values-row` and `values-provenance`, read through `om_extract.schemas.load_schema()`
+  (`contract.load_schema(name)` takes those names). `validate_coverage()` stays in indicators (its coverage table).
+- README: a "Contract" section (the values file, the 1.2 columns, the provenance).
+
 # om-extract 0.1.0 (2026-10-22)
 
 - New `om_extract.schemas`: `schema_dir()` finds the platform schemas (`$OM_SCHEMAS_DIR`, the npm package in
