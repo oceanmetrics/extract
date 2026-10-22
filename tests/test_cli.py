@@ -52,3 +52,40 @@ def test_cli_via_subprocess_exit_code(tmp_path):
   d = _dir(tmp_path, "  dependency: [missing]\n")
   r = subprocess.run([sys.executable, "-m", "om_extract.cli", "notebooks", "check", str(d)], capture_output=True, text=True)
   assert r.returncode == 1 and "missing" in r.stderr
+
+
+def _layer(tmp_path, doc=None):
+  from fixtures_erddap import grid, info_table
+  import json
+  c, i = tmp_path / "collection.json", tmp_path / "info.json"
+  c.write_text(json.dumps(doc or grid()))
+  i.write_text(json.dumps(info_table("1985-04-01T12:00:00Z", "2026-09-13T12:00:00Z")))
+  return c, i
+
+
+def test_layer_info_prints_the_dataset_record_and_the_time_extent(tmp_path, capsys):
+  c, i = _layer(tmp_path)
+  assert main(["layer", "info", str(c), "--info", str(i)]) == 0
+  out = capsys.readouterr().out
+  assert "dhw_5km" in out and "lat_descending true" in out and "1985-04-01T12:00:00Z to 2026-09-13T12:00:00Z" in out
+
+
+def test_layer_info_json_prints_the_record(tmp_path, capsys):
+  import json
+  c, i = _layer(tmp_path)
+  assert main(["layer", "info", str(c), "--info", str(i), "--json"]) == 0
+  rec = json.loads(capsys.readouterr().out)
+  assert rec["dataset"]["protocol"] == "griddap" and rec["extent"]["time_end"] == "2026-09-13T12:00:00Z"
+
+
+def test_layer_info_exits_1_with_the_schema_errors_for_an_invalid_collection(tmp_path, capsys):
+  from fixtures_erddap import grid
+  c, i = _layer(tmp_path, grid(erddap__base_url=None))
+  assert main(["layer", "info", str(c), "--info", str(i)]) == 1
+  assert "erddap:base_url" in capsys.readouterr().err
+
+
+def test_layer_info_exits_1_for_a_collection_no_reader_knows(tmp_path, capsys):
+  c, i = _layer(tmp_path, {"id": "atlas/x", "cog:crs": "EPSG:3857"})
+  assert main(["layer", "info", str(c), "--info", str(i)]) == 1
+  assert "no reader for collection 'atlas/x'" in capsys.readouterr().err

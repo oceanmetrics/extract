@@ -1,9 +1,13 @@
 """Command line entry point (`om-extract`). It parses arguments and calls the functions in `om_extract/`; it holds no logic."""
 import argparse
+import json
 import sys
 
 from om_extract import __version__
+from om_extract.layers import format_layer_info, layer_info
 from om_extract.notebooks import check_dir, read_blocks, write_index
+from om_extract.readers import UnknownProfile
+from om_extract.readers.erddap import ErddapError, InvalidCollection
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -17,6 +21,12 @@ def _parser() -> argparse.ArgumentParser:
   idx = nbs.add_parser("index", help="write index.qmd, _om/order.json and _om/dag.mmd")
   idx.add_argument("dir")
   idx.add_argument("--title", default="Workflows")
+  ly = sub.add_parser("layer", help="a layer's STAC collection")
+  lys = ly.add_subparsers(dest="action", required=True)
+  inf = lys.add_parser("info", help="print the dataset record and the time extent of a collection")
+  inf.add_argument("collection", help="path or URL of the collection.json")
+  inf.add_argument("--info", help="a saved ERDDAP info/<id>/index.json; without it the server is asked")
+  inf.add_argument("--json", action="store_true", help="print the record as JSON")
   return p
 
 
@@ -25,6 +35,15 @@ def main(argv: list[str] | None = None) -> int:
   args = _parser().parse_args(argv)
   if args.version or args.command is None:
     print(f"om-extract {__version__}")
+    return 0
+  if args.command == "layer":
+    try:
+      rec = layer_info(args.collection, info_path=args.info)
+    except (InvalidCollection, UnknownProfile, ErddapError, OSError, ValueError) as e:
+      for line in str(e).splitlines():
+        print(f"error: {line}", file=sys.stderr)
+      return 1
+    print(json.dumps(rec, indent=2) if args.json else format_layer_info(rec))
     return 0
   if args.action == "check":
     errors = check_dir(args.dir)

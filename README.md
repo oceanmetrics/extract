@@ -78,6 +78,53 @@ carry none.
 SELECT place_id, time, value FROM read_parquet(
   'https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/indicators/values/indicator=erddap:dhw_5km:CRW_SST:mean/coll=places/data.parquet')
 WHERE time_grain = 'year' ORDER BY place_id, time;
+## Readers
+
+One reader per source, behind one interface (`om_extract/readers/base.py`), chosen by the profile a STAC collection
+declares: `readers.for_collection(collection)` returns the `ErddapGrid` reader when `erddap:protocol` is present.
+
+```python
+class Reader(Protocol):
+  kind: str                                                # "erddap" today; "cog", "h3", "zarr" follow
+  def extent(self) -> Extent                               # time_start, time_end, bbox, depth_levels (+ step_days, live)
+  def axes(self, bbox, depth=None) -> Axes                 # lat, lon centres, step, lat_descending, lon_range
+  def slab(self, bbox, t0, t1, var) -> pyarrow.Table       # time, lat, lon, value (the long table erddap-places shapes)
+  def slice(self, bbox, t, var) -> pyarrow.Table           # lat, lon, value (one time step)
+  def source_block(self) -> dict                           # the erddap:* / cog:* / ... keys, for the provenance
+```
+
+`bbox` is `(lon_min, lat_min, lon_max, lat_max)`, one polygon lobe, never across the antimeridian.
+
+**The ERDDAP reader** (`om_extract/readers/erddap.py`, ported from erddap-places' `erddap.ts`, `extent.ts` and
+`fetchRetry.ts`; the tests copy the expected URLs from its tests) builds on an `erddap-grid` collection, validated
+against the platform schema first (`InvalidCollection` lists the errors). Its rules:
+
+- **URL**: `{base}/griddap/{dataset}.{fmt}?{var}[(t0):1:(t1)][(lat):1:(lat)][(lon):1:(lon)]`; each `[` and `]` is
+  percent-encoded and nothing else is. A descending latitude axis is requested high to low. A depth level is one more
+  constraint after time. tabledap URLs (`tabledap_url`) encode `%2C` between columns and the comparison operators only.
+- **Longitude** is shifted into the dataset's frame and clamped to `erddap:lon_range`. A lobe that straddles the seam of
+  a 0..360 grid is refused (split it).
+- **Chunks**: a slab is cut into requests of at most 90 days or 100,000 values (`chunk_days_for(cells, step_days)`; an
+  8-day product counts steps in its own days), fetched one by one as Parquet, concatenated in time order and renamed
+  to the long table.
+- **Extent**: the time range is asked of `/info/<id>/index.json` (the catalog's end is null or stale for live grids);
+  when the server does not answer, the catalog's range is used and `Extent.live` is False. A slab window is clamped to
+  the extent; a window wholly outside it raises.
+- **Axes**: the catalog's `cube:dimensions` lattice by default (no request), snapped to the nearest cell at each end as
+  ERDDAP does; `axes(bbox, live=True)`, or an axis without a published step, asks the server for the axis vectors.
+- **Fetch**: `fetch(url) -> bytes` is injectable (tests feed Parquet bytes). The default is `httpx` with a per-attempt
+  timeout, one retry on a network error, a timeout or a 5xx, none on a 4xx, and an error that names the host
+  (`pae-paha.pacioos.hawaii.edu did not answer (no response within 20 s, 2 tries)`).
+- **Format**: `parquetWMeta`, then `parquet`; a server offering neither is refused (CSV and JSONP are browser fallbacks).
+- tabledap collections build a reader and report their extent; `slab()` raises `NotImplementedError` until the point mask.
+
+`om_extract/layers.py` loads a collection (`load_collection(path_or_url)`) and returns the dataset record the apps read
+(`dataset_of(collection)`, erddap-places' `toDataset()` with its defaults).
+
+```sh
+uv run om-extract layer info collection.json                    # asks the server for the live time extent
+uv run om-extract layer info collection.json --info info.json   # a saved info/<id>/index.json instead (offline)
+uv run om-extract layer info collection.json --json
 ```
 
 ## Notebooks
