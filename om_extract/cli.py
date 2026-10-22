@@ -43,7 +43,49 @@ def _parser() -> argparse.ArgumentParser:
   rn.add_argument("--coll", help="gazetteer collection of the place (default: NMS: is places, else the authority lowercased)")
   rn.add_argument("--slab-dir", help="offline: serve each request URL from <slab-dir>/<sha1 of the URL>.parquet "
                                      "(hex sha1 of the URL's UTF-8 bytes, the URL as the provenance lists it)")
+  pa = sub.add_parser("parity", help="run the engine live and compare it with erddap-places' published stats",
+                      description="Run the engine for a place over the published window through its chunk store, "
+                                  "download the published parquet, provenance and item, compare them and write "
+                                  "parity.json (several variables or places: <out>/<variable>/parity_<place>.json and "
+                                  "<out>/summary.md).")
+  pa.add_argument("--dataset", required=True, help="the ERDDAP collection (dhw_5km)")
+  pa.add_argument("--variable", required=True, action="append", help="the variable (repeat for several)")
+  pa.add_argument("--place", required=True, action="append",
+                  help="the place id (NMS:CINMS; repeat for several, or 'all' for every NMS: place of --coll)")
+  pa.add_argument("--chunks", help="the engine's chunk store (default <out>/chunks, per place in a batch)")
+  pa.add_argument("--out", default="parity", help="output directory (default ./parity)")
+  pa.add_argument("--base", default=None, help="the gazetteer base URL or directory "
+                                               "(default https://storage.oceanmetrics.io/gazetteer)")
+  pa.add_argument("--coll", default="places", help="the places collection of the geometry (default places)")
+  pa.add_argument("--reference-chunks", help="the runner's chunk store (PRECOMPUTE_CHUNKS), read only: plan from its "
+                                             "chunk names and compare every fetched chunk with it")
+  pa.add_argument("--fetch", default="all", help="with --reference-chunks, the chunks the engine computes itself: "
+                                                 "all (default), none, last:N (the rest copied from the reference)")
+  pa.add_argument("--window", default="published", choices=["published", "live"],
+                  help="published (default): the published file's window; live: window(ext, 'all')")
+  pa.add_argument("--tries", type=int, default=3, help="tries in a row without a new chunk before a place is given "
+                                                       "up, resting 10, 30, 60 min between (default 3)")
   return p
+
+
+def _parity(args) -> int:
+  from om_extract.parity import run_batch, run_parity, run_with_tries, verdict_table
+  from om_extract.places import GAZETTEER_BASE, place_ids
+  base = args.base or GAZETTEER_BASE
+  places = place_ids(args.coll, base, "NMS:") if args.place == ["all"] else args.place
+  kw = {"base": base, "coll": args.coll, "reference_chunks": args.reference_chunks, "fetch_mode": args.fetch,
+        "window_mode": args.window}
+  if len(places) == 1 and len(args.variable) == 1:
+    res = run_with_tries(lambda: run_parity(args.dataset, args.variable[0], places[0], args.out, chunks=args.chunks,
+                                            log=print, **kw), args.tries, log=print)
+    print(verdict_table(res))
+    print(f"wrote {args.out}/parity.json")
+    return 0
+  if args.chunks:
+    kw["chunks"] = args.chunks
+  res = run_batch(args.dataset, args.variable, places, args.out, log=print, attempts=args.tries, **kw)
+  print(f"wrote {args.out}/summary.md ({len(res)} place(s), {sum('error' in r for r in res)} failed)")
+  return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,6 +112,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wrote {res['provenance']}")
     print(f"wrote {res['values']} ({res['rows']} rows, {res['indicator']}, coll {res['coll']})")
     return 0
+  if args.command == "parity":
+    try:
+      return _parity(args)
+    except (InvalidCollection, UnknownProfile, ErddapError, OSError, ValueError, LookupError) as e:
+      for line in str(e).splitlines():
+        print(f"error: {line}", file=sys.stderr)
+      return 1
   if args.command == "layer":
     try:
       rec = layer_info(args.collection, info_path=args.info)
