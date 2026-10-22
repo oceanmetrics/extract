@@ -86,6 +86,47 @@ npx tsx ../../extract/tests/fixtures/mask/make_expected.mjs --lib src/lib --geoj
 
 The place polygons in the fixtures are NOAA national marine sanctuary boundaries (public), stored as WKB.
 
+## Run
+
+`om-extract run` summarises one variable of a layer over one place and one time window, end to end, and writes the
+values file. It is erddap-places' precompute `computeOne()` in Python: the same lobes, axes, mask, requests and SQL.
+
+```sh
+uv run om-extract run --collection collection.json --place NMS:CINMS --geometry cinms.wkb \
+  --var CRW_SST --t0 2026-09-01 --t1 2026-09-30 --out out/ [--stat mean_wt] [--coll places] [--slab-dir slabs/]
+```
+
+It writes:
+
+| File | What |
+|---|---|
+| `<out>/stats.parquet` | erddap-places' stats table: one row per UTC day, `date, n, mean, mean_wt, sd, min, max, p10, p90, weight_sum, place_id, dataset_id, variable` (categorical: `date, class, n, weight, frac_area, pct_cells, place_id, dataset_id, variable`) |
+| `<out>/provenance.json` | erddap-places' provenance keys: place, dataset, variable, window, `lobes`, `mask_cells`, `axes`, `griddap_urls` (up to 24), `griddap_url_templates`, `griddap_chunks`, `griddap_requests`, `rows`, `bytes`, `generated`, `erddap_base`, `erddap_version`, `sql` |
+| `<out>/values/indicator=<id>/coll=<slug>/data.parquet` | the contract 1.2.0 values file, written by `contract.write_values()` and checked by `contract.validate_file()`; the row count is printed, and any contract error exits 1 with the message |
+
+- `--geometry` is a WKB file or a GeoJSON file (a geometry, Feature or FeatureCollection), already cut at +-180.
+- `--stat` is the stats column that becomes `value`: `mean_wt` (default), `mean`, `sd`, `min`, `max`, `p10`, `p90`.
+  The indicator is `erddap:<dataset_id>:<variable>:<stat>`; a categorical variable gives `erddap:<dataset_id>:<variable>:share`,
+  one row per class with `value` = `frac_area`.
+- `n` is the cells with data at the step; `sd` the SD across them for `mean_wt` and `mean`, else null.
+- Rows are at the grid's native grain (`day` for `P1D`, `month` for `P1M`, else from the step in days); aggregation to
+  a coarser grain is build week 1.
+- `--coll` defaults from the place id: `NMS:` is `places`, any other authority lowercased.
+- `--slab-dir` runs offline: each request URL is read from `<slab-dir>/<sha1 of the URL>.parquet` (the hex sha1 of the
+  URL's UTF-8 bytes, `om_extract.run.slab_file(url)`). A URL without a file is an error that names it; the info table
+  is one such URL, so the time extent is the catalog's.
+
+In Python the steps are three calls (`om_extract/engine.py`, `om_extract/values.py`):
+
+```python
+from om_extract.engine import extract
+from om_extract.values import values_rows, provenance_for
+from om_extract import contract
+
+x = extract(collection, "NMS:CINMS", wkb_bytes, "CRW_SST", "2026-09-01", "2026-09-30")   # x.stats, x.urls, x.mask_cells
+contract.write_values(values_rows(x, stat="mean_wt"), "out", provenance_for(x, "0.4.0"))
+```
+
 ## Commands
 
 ```sh

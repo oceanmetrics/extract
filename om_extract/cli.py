@@ -27,14 +27,48 @@ def _parser() -> argparse.ArgumentParser:
   inf.add_argument("collection", help="path or URL of the collection.json")
   inf.add_argument("--info", help="a saved ERDDAP info/<id>/index.json; without it the server is asked")
   inf.add_argument("--json", action="store_true", help="print the record as JSON")
+  rn = sub.add_parser("run", help="summarise one variable of a layer over one place and window into a values file",
+                      description="Extract one place x variable x window and write <out>/stats.parquet, "
+                                  "<out>/provenance.json and <out>/values/indicator=<id>/coll=<slug>/data.parquet "
+                                  "(validated against the values contract).")
+  rn.add_argument("--collection", required=True, help="path or URL of the layer's collection.json")
+  rn.add_argument("--place", required=True, help="the gazetteer place id (NMS:CINMS)")
+  rn.add_argument("--geometry", required=True, help="the place geometry: a WKB file, or a GeoJSON file")
+  rn.add_argument("--var", required=True, help="the variable (a cube:variables key)")
+  rn.add_argument("--t0", required=True, help="first day, yyyy-mm-dd")
+  rn.add_argument("--t1", required=True, help="last day, yyyy-mm-dd")
+  rn.add_argument("--out", required=True, help="output directory")
+  rn.add_argument("--stat", default="mean_wt",
+                  help="the stats column that is the value: mean_wt (default), mean, sd, min, max, p10, p90")
+  rn.add_argument("--coll", help="gazetteer collection of the place (default: NMS: is places, else the authority lowercased)")
+  rn.add_argument("--slab-dir", help="offline: serve each request URL from <slab-dir>/<sha1 of the URL>.parquet "
+                                     "(hex sha1 of the URL's UTF-8 bytes, the URL as the provenance lists it)")
   return p
 
 
 def main(argv: list[str] | None = None) -> int:
-  """Run the command line; return the exit code (0 ok, 1 errors in the notebooks)."""
+  """Run the command line; return the exit code (0 ok, 1 on any error)."""
   args = _parser().parse_args(argv)
   if args.version or args.command is None:
     print(f"om-extract {__version__}")
+    return 0
+  if args.command == "run":
+    from om_extract.contract import ContractError
+    from om_extract.run import run
+    try:
+      res = run(args.collection, args.place, args.geometry, args.var, args.t0, args.t1, args.out, stat=args.stat,
+                coll=args.coll, slab_dir=args.slab_dir)
+    except ContractError as e:
+      for line in e.errors:
+        print(f"error: {line}", file=sys.stderr)
+      return 1
+    except (InvalidCollection, UnknownProfile, ErddapError, OSError, ValueError) as e:
+      for line in str(e).splitlines():
+        print(f"error: {line}", file=sys.stderr)
+      return 1
+    print(f"wrote {res['stats']}")
+    print(f"wrote {res['provenance']}")
+    print(f"wrote {res['values']} ({res['rows']} rows, {res['indicator']}, coll {res['coll']})")
     return 0
   if args.command == "layer":
     try:

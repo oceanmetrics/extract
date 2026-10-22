@@ -1,3 +1,22 @@
+# om-extract 0.4.0 (2026-10-22)
+
+- New `om_extract.engine`: `extract(collection, place_id, geometry_wkb, var, t0, t1, *, fetch=None, coll=None,
+  categorical=None)` runs one place x variable x window end to end (erddap-places' precompute `computeOne()`): lobes,
+  axes, mask (0..360 grids masked in -180..180 and joined in the dataset's frame), the chunked slab requests, the
+  DISTINCT slab and `stats_daily` / `stats_categorical`. It returns an `Extraction` with the stats table in
+  erddap-places' published columns (`STATS_COLUMNS`, `CATEGORICAL_COLUMNS`: `frac_area`, `pct_cells`) and its identity
+  columns, the request URLs, the mask, the mask cell and lobe counts, the SQL, the source block, the dataset record and
+  the window. `value_expr()` converts a Kelvin variable to deg C as erddap-places does; `stats_provenance()` gives the
+  stats file's provenance with erddap-places' keys.
+- New `om_extract.values`: `values_rows(extraction, *, stat="mean_wt", grain=None)` turns the stats into contract rows at
+  the native grain (indicator `erddap:<dataset>:<variable>:<stat>`, categorical `...:share`; `n` the cells with data;
+  `sd` the cell SD for `mean_wt` and `mean`); another grain raises "aggregation to a coarser grain is build week 1".
+  `provenance_for(extraction, code_version)` states producer, dataset (from the collection's providers, licence and
+  links), one `data` source per request URL plus the collection as `product`, method, code, licence and source version.
+- New CLI `om-extract run --collection --place --geometry --var --t0 --t1 --out [--stat] [--coll] [--slab-dir]`
+  (`om_extract.run.run()`): writes `stats.parquet`, `provenance.json` and the values file, validates it and prints the
+  row count; exit 1 with the message on any contract error. `--slab-dir` serves each URL from `<sha1 of the URL>.parquet`.
+
 # om-extract 0.3.0 (2026-10-22)
 
 - New `om_extract.geom`: `wkb_to_geojson()` / `from_wkb()` (a port of erddap-places `wkb.ts`) and `place_lobes()` /
