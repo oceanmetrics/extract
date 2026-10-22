@@ -36,7 +36,7 @@ def test_continuous_rows_validate_and_are_one_a_day_at_the_day_grain():
 
 
 def test_the_indicator_id_is_erddap_dataset_variable_stat():
-  assert {r["indicator"] for r in values_rows(ex())} == {"erddap:sst_deg1:sst:mean_wt"}
+  assert {r["indicator"] for r in values_rows(ex())} == {"erddap:sst_deg1:sst:mean"}
   assert {r["indicator"] for r in values_rows(ex(), stat="p90")} == {"erddap:sst_deg1:sst:p90"}
   assert indicator_id("sst_deg1", "cls", "mean_wt", categorical=True) == "erddap:sst_deg1:cls:share"
 
@@ -186,5 +186,12 @@ def test_the_provenance_names_producer_code_method_license_and_source_version():
 def test_write_values_accepts_the_rows_and_provenance(tmp_path):
   x = ex()
   path = contract.write_values(values_rows(x), tmp_path, provenance_for(x, "0.4.0"))
-  assert path == tmp_path / "values" / "indicator=erddap:sst_deg1:sst:mean_wt" / "coll=test" / "data.parquet"
+  assert path == tmp_path / "values" / "indicator=erddap:sst_deg1:sst:mean" / "coll=test" / "data.parquet"
   assert contract.validate_file(path) == []
+
+
+def test_regression_indicator_id_matches_the_published_mean_id():
+  # the catalog publishes the area-weighted mean as erddap:<ds>:<var>:mean (indicators' erddap adapter), not mean_wt
+  assert indicator_id("dhw_5km", "CRW_SST", "mean_wt") == "erddap:dhw_5km:CRW_SST:mean"
+  assert indicator_id("dhw_5km", "CRW_SST", "mean") == "erddap:dhw_5km:CRW_SST:mean_unw"
+  assert indicator_id("dhw_5km", "CRW_SST", "p90") == "erddap:dhw_5km:CRW_SST:p90"

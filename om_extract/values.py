@@ -7,8 +7,8 @@ happens here yet (month and year rows from daily ones arrive in build week 1). T
   step in days (the extent's `step_days`, else the `P<n>D|M|Y` step of the catalog): under 28 days is `day` (an 8-day
   composite is one row a step, at the step's date), 28 to 359 is `month`, 360 or more `year`; unknown is `day`. `time`
   is the first day of the grain period holding the stats `date`.
-- **indicator**: `erddap:<dataset_id>:<variable>:<stat>`; a categorical variable's is
-  `erddap:<dataset_id>:<variable>:share`.
+- **indicator**: `erddap:<dataset_id>:<variable>:<label>`, where `mean_wt` is labelled `mean` (the id the catalog
+  publishes) and the unweighted `mean` is `mean_unw`; a categorical variable's is `erddap:<dataset_id>:<variable>:share`.
 - **value**: the `stat` column of the stats table (`mean_wt` by default; `mean`, `sd`, `min`, `max`, `p10`, `p90`);
   for a categorical variable `frac_area`, the area-weighted share of the place in the class. NaN or infinite is null.
 - **n**: the stats `n`, the cells with data at that step (for a class: its cells).
@@ -60,9 +60,16 @@ def native_grain(time_step: str | None, step_days: float | None = None) -> str:
   return "month" if d < 360 else "year"
 
 
+# the published id of the area-weighted mean is `...:mean` (oceanmetrics/indicators' erddap adapter names the
+# `mean_wt` column that way), so the engine's ids match the catalog's; the unweighted mean is published as `mean_unw`
+STAT_LABEL = {"mean_wt": "mean", "mean": "mean_unw"}
+
+
 def indicator_id(dataset_id: str, variable: str, stat: str, categorical: bool = False) -> str:
-  """`erddap:<dataset_id>:<variable>:<stat>`, or `...:share` for a categorical variable."""
-  return f"erddap:{dataset_id}:{variable}:{'share' if categorical else stat}"
+  """`erddap:<dataset_id>:<variable>:<label>` with `mean_wt` labelled `mean` (the published id) and `mean` as
+  `mean_unw`; `...:share` for a categorical variable."""
+  label = "share" if categorical else STAT_LABEL.get(stat, stat)
+  return f"erddap:{dataset_id}:{variable}:{label}"
 
 
 def _finite(v: Any) -> float | None:

@@ -35,8 +35,8 @@ def test_run_writes_stats_provenance_and_a_valid_values_file(tmp_path, capsys):
   d = setup(tmp_path)
   assert main(argv(d)) == 0
   out = capsys.readouterr().out
-  values = d / "out" / "values" / "indicator=erddap:sst_deg1:sst:mean_wt" / "coll=places" / "data.parquet"
-  assert f"wrote {values} (3 rows, erddap:sst_deg1:sst:mean_wt, coll places)" in out
+  values = d / "out" / "values" / "indicator=erddap:sst_deg1:sst:mean" / "coll=places" / "data.parquet"
+  assert f"wrote {values} (3 rows, erddap:sst_deg1:sst:mean, coll places)" in out
   assert contract.validate_file(values) == []
   table, prov = contract.read_values(values)
   assert table.num_rows == 3 and prov["rows"] == 3 and prov["code"]["adapter"] == "om_extract.engine"
