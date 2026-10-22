@@ -45,12 +45,13 @@ def test_schema_dir_falls_back_to_sibling_checkout(tmp_path, monkeypatch):
   assert schemas.schema_dir(root) == sib
 
 
-def test_schema_dir_none_exists_raises_naming_the_three_places(tmp_path, monkeypatch):
+def test_schema_dir_none_exists_raises_naming_the_places(tmp_path, monkeypatch):
   monkeypatch.delenv("OM_SCHEMAS_DIR", raising=False)
   with pytest.raises(FileNotFoundError) as e:
-    schemas.schema_dir(tmp_path / "extract")
+    schemas.schema_dir(tmp_path / "extract", cwd=tmp_path / "app")
   msg = str(e.value)
-  assert "OM_SCHEMAS_DIR" in msg and "node_modules/@oceanmetrics/catalog/schemas" in msg and "platform/packages/catalog/schemas" in msg
+  assert "OM_SCHEMAS_DIR" in msg and "<repo>/node_modules/@oceanmetrics/catalog/schemas" in msg
+  assert "<repo>/../platform/packages/catalog/schemas" in msg and "<cwd>/../platform/packages/catalog/schemas" in msg
 
 
 def test_load_schema_reads_named_file(tmp_path, monkeypatch):
