@@ -81,8 +81,15 @@ def _finite(v: Any) -> float | None:
 
 def values_rows(extraction: Extraction, *, stat: str = "mean_wt", grain: str | None = None) -> list[dict]:
   """The contract rows of an extraction at its native grain (rules in the module docstring). `grain` may only name the
-  native grain today: any other raises ValueError("aggregation to a coarser grain is build week 1")."""
+  native grain today: any other raises ValueError("aggregation to a coarser grain is build week 1"). An H3 extraction
+  (`engine_h3.extract_h3()`) gives `engine_h3.h3_values_rows()`."""
+  if getattr(extraction, "kind", None) == "h3":
+    from om_extract.engine_h3 import h3_values_rows
+    return h3_values_rows(extraction, stat=stat, grain=grain)
   x = extraction
+  if x.dataset.protocol == "cog":
+    raise NotImplementedError("values rows of a COG extraction wait on the atlas indicators' ids and grains (vision "
+                              "plan 'From SDMs to indicators', step 2); use extraction.stats")
   native = native_grain(x.dataset.time_step, x.step_days)
   if grain is not None and grain != native:
     if grain not in GRAINS:

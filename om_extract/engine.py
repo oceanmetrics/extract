@@ -144,7 +144,13 @@ def extract(collection: dict | str | Path, place_id: str, geometry_wkb: Any, var
   gazetteer. `fetch(url) -> bytes` serves every request (default: the reader's own HTTP fetch). `coll` is recorded for
   the values rows. `categorical` overrides the variable's `erddap-places:categorical` flag. Returns an `Extraction`
   (see its docstring). Raises ValueError when the place has no polygon or the variable is not in the collection.
+  A STAC Item (a COG) or a reader object instead of a collection goes to `engine_reader.extract_reader()`.
   """
+  if not isinstance(collection, (str, Path)) and (not isinstance(collection, dict)
+                                                 or collection.get("type") == "Feature"):
+    from om_extract.engine_reader import extract_reader
+    return extract_reader(collection, place_id, geometry_wkb, var, t0, t1, fetch=fetch, coll=coll,
+                          categorical=categorical)
   href = None
   if not isinstance(collection, dict):
     href = str(collection)

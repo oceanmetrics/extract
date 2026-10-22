@@ -44,7 +44,7 @@ def test_an_invalid_collection_raises_with_the_schema_errors():
 def test_for_collection_dispatches_on_the_erddap_profile_for_a_dict_and_for_json_text():
   assert isinstance(readers.for_collection(grid(), info=INFO), ErddapGrid)
   assert isinstance(readers.for_collection(json.dumps(grid()), info=INFO), ErddapGrid)
-  assert readers.kinds() == ["erddap"]
+  assert readers.kinds()[0] == "erddap"  # first in dispatch order (h3 and cog follow)
 
 
 def test_for_collection_names_the_profiles_it_found_when_no_reader_matches():

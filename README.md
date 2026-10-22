@@ -236,6 +236,72 @@ uv run om-extract layer info collection.json --info info.json   # a saved info/<
 uv run om-extract layer info collection.json --json
 ```
 
+## Readers: COG and H3
+
+A raster is summarised on its own grid by the mask rule; H3 membership serves only layers whose native grid is H3.
+`readers.for_collection(doc)` dispatches in order: `erddap:protocol` is ERDDAP, `h3:resolutions` is H3, a STAC Item
+(`type: Feature`) with a data COG asset is COG.
+
+**The COG reader** (`om_extract/readers/cog.py`, `CogReader(item, *, asset="cog", fetch=None, item_href=None)`) reads a
+STAC Item that passes the platform `cog` profile (`InvalidProfile` lists the errors) with rasterio: a local path, or an
+`http(s)` href that GDAL reads by range requests; `fetch` is a rasterio `opener`. Its rules:
+
+- **CRS**: EPSG:4326 only, in `proj:code` and in the file; anything else raises `UnsupportedCrs`. The EPSG:3857 copies
+  the map draws are for display and are never summarised. Longitudes in [-180, 180].
+- **Axes**: the pixel centres of the GeoTIFF's geotransform (`x0 + (col + 0.5) * dx`) over every pixel whose
+  footprint overlaps the bbox, plus one pixel of margin on each side, so a lone centre never gets a +-0.5 deg cell from
+  the mask's edge rule; north to south for a north-up raster. A bbox that misses the raster gives no pixels.
+- **Band**: `var` is a band name of the asset's `bands` or `raster:bands`, or a 1-based number; None is `atlas:bidx`,
+  else 1. Nodata (the file's, else the band's: a number, `nan`, `inf`, `-inf`) and NaN are null; `raster:scale` and
+  `raster:offset` are applied.
+- **Time**: a COG is one time step, at the item's `datetime`, else `start_datetime`, spanning `[start_datetime,
+  end_datetime]`. A window that overlaps the span gives that step, one outside it zero rows; an item with no time is in
+  every window with a null time.
+- **The engine**: `engine.extract()` takes a COG Item (a dict with `type: Feature`) or any reader object in place of
+  the collection and hands it to `engine_reader.extract_reader()`: the same lobes, `grid_mask()` on the native axes and
+  `stats_daily` SQL, the same `Extraction` and stats columns (`dataset_id` is the item id, `urls` the asset href). A
+  place or a window that misses the raster gives no rows. `values_rows()` refuses a COG extraction until the atlas
+  indicators fix its ids and grains (vision plan, "From SDMs to indicators", step 2).
+
+```python
+x = extract(item, "NMS:CINMS", wkb_bytes, "density", "1991-01-01", "2018-12-31")   # x.stats: one row, the item's step
+```
+
+**The H3 reader** (`om_extract/readers/h3.py`, `H3Reader(collection, *, resolution=None, fetch=None, root=None,
+keys=None)`) reads a collection that passes the `h3` profile. `cells(res, h3_ids)` returns the layer's rows for those
+cells: the whole file (`h3:layout.template` with `{res}`) for a resolution that is not split, only the parent
+partitions (`parent_template`, `p=<parent>` at `parent_res[res]`, computed by `h3_parent()` with bit arithmetic) for
+one that is. Paths resolve against `root`, else the directory of the `rel: self` link; other placeholders come from
+`keys`; a missing partition holds no rows. A `string` cell column matches lowercase hex, a `uint64` one the integer.
+With `h3:periods`, each period is a file when the template holds its placeholder, else a column of that name; it comes
+back as `period`. `axes()`, `slab()` and `slice()` raise: an H3 layer has cells, not axes.
+
+**Membership** (`om_extract/membership.py`): `load_membership(slug, place_id, res, base=GAZETTEER)` reads
+`<base>/<slug>/h3/membership.json`, then `h3/res=<r>/membership.parquet`, or for res 6 and 7 only the place's parent
+partitions `h3/res=<r>/p=<parent>/membership.parquet` named by `h3/parents.parquet`, with a `place_id =` filter in
+DuckDB (local paths and `https` alike). Columns `place_id, h3, share` (float32); the gazetteer keeps a cell when
+its share is at least `min_share` (0.01) or it holds that share of the place. `base` defaults to
+`https://storage.oceanmetrics.io/gazetteer`.
+
+**`extract_h3(collection, place_id, membership, var, res)`** (`om_extract/engine_h3.py`) joins the layer's cells with
+the place's membership in DuckDB (`om_extract/sql/stats_h3.sql`, the grid rule with the membership as the mask):
+per period, over the place's cells that have a value, `mean_wt = sum(value * share) / sum(share)`, `weight_sum =
+sum(share)`, and `n` (the cells with a value), `mean`, `sd` (n - 1), `min`, `max`, `p10`, `p90` unweighted. The stats
+table has the grid stats' columns (`H3_STATS_COLUMNS`) with `date` the first day of the period (`1990s` is
+1990-01-01; null and one row for a layer without periods) and `period` the label. `values_rows()` gives one contract
+row per period: indicator `h3:<collection id>:<var>:mean` (`mean_unw` for the unweighted mean), `time_grain` the
+periods' grain or `all`, `unit` the column's `unit` in `table:columns`, else `1`; `h3_provenance_for()` gives its
+provenance.
+
+```python
+from om_extract.membership import load_membership
+from om_extract.engine_h3 import extract_h3, h3_provenance_for
+
+mem = load_membership("places", "NMS:CINMS", 5)
+x = extract_h3(obis_h3_collection, "NMS:CINMS", mem, "shannon", 5)        # root from the collection's self link
+contract.write_values(values_rows(x), "out", h3_provenance_for(x, om_extract.__version__))
+```
+
 ## Notebooks
 
 Each workflow notebook (`*.qmd` in `oceanmetrics/workflows`) carries an `om:` block in its YAML front matter, validated

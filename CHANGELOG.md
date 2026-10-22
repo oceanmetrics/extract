@@ -1,3 +1,26 @@
+# unreleased: readers
+
+- New COG reader `readers.cog.CogReader(item, *, asset="cog", fetch=None, item_href=None)`: a STAC Item that passes the
+  `cog` profile, read with rasterio (local path, or range requests over HTTP); `axes(bbox)` the native pixel centres
+  over the bbox with one pixel of margin, `slab()` / `slice()` one band (name, number or `atlas:bidx`) with nodata and
+  NaN as null and `raster:scale` / `raster:offset` applied, the item's one time step (none outside its span, a null
+  time for a timeless item), `source_block()` the href, band, nodata and `proj:code`. EPSG:4326 only: any other CRS
+  raises `UnsupportedCrs` (3857 copies are for display).
+- `engine.extract()` takes a COG Item or a reader object in place of the collection and hands it to the new
+  `engine_reader.extract_reader()`: the same lobes, mask, `stats_daily` SQL and `Extraction` on the raster's own grid.
+  `values_rows()` of a COG extraction raises `NotImplementedError` until the atlas indicators fix their ids.
+- New H3 reader `readers.h3.H3Reader(collection, *, resolution=None, fetch=None, root=None, keys=None)`: a collection
+  that passes the `h3` profile; `cells(res, h3_ids)` reads the whole file of an unsplit resolution or only the parent
+  partitions of a split one (`h3_parent()`), with periods from the path or a column; `period_date()`.
+- New `om_extract.membership.load_membership(slug, place_id, res, base=GAZETTEER)`: the gazetteer's place x H3
+  membership (`membership.json`, then the res file or the place's parent partitions from `parents.parquet`) in DuckDB.
+- New `om_extract.engine_h3.extract_h3(collection, place_id, membership, var, res)`: the layer's cells joined with the
+  membership, share-weighted (`sql/stats_h3.sql`), one row per period (`H3_STATS_COLUMNS`); `values.values_rows()`
+  gives `h3:<collection>:<var>:mean` rows at the periods' grain or `all`; `h3_provenance_for()`.
+- `readers.for_collection()` dispatches `h3:resolutions` to H3 and a Feature with a data COG asset to COG; the profile
+  errors of both are `readers.InvalidProfile` (a subclass of `InvalidCollection`).
+- New dependency: `rasterio>=1.4`.
+
 # om-extract 0.4.0 (2026-10-22)
 
 - New `om_extract.engine`: `extract(collection, place_id, geometry_wkb, var, t0, t1, *, fetch=None, coll=None,

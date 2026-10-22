@@ -3,10 +3,14 @@ import json
 from collections.abc import Callable
 
 from om_extract.readers.base import Axes, BBox, Extent, Reader, SLAB_SCHEMA, SLICE_SCHEMA
+from om_extract.readers.cog import CogReader, UnsupportedCrs, has_cog_asset
 from om_extract.readers.erddap import ErddapGrid, InvalidCollection
+from om_extract.readers.h3 import H3Reader, is_h3_collection
+from om_extract.readers.profile import InvalidProfile
 
-__all__ = ["Axes", "BBox", "ErddapGrid", "Extent", "InvalidCollection", "Reader", "SLAB_SCHEMA", "SLICE_SCHEMA",
-           "UnknownProfile", "for_collection", "kinds", "register"]
+__all__ = ["Axes", "BBox", "CogReader", "ErddapGrid", "Extent", "H3Reader", "InvalidCollection", "InvalidProfile",
+           "Reader", "SLAB_SCHEMA", "SLICE_SCHEMA", "UnknownProfile", "UnsupportedCrs", "for_collection", "kinds",
+           "register"]
 
 
 class UnknownProfile(ValueError):
@@ -30,7 +34,8 @@ def kinds() -> list[str]:
 def for_collection(collection: dict | str | bytes, **kwargs) -> Reader:
   """The reader for a collection (a dict, or its JSON text), dispatched on the profile it declares.
 
-  Today `erddap:protocol` present means ERDDAP. Keyword arguments (`fetch=`, `info=`) go to the reader. Raises
+  `erddap:protocol` present means ERDDAP; `h3:resolutions` means H3; a STAC Item (`type: Feature`) with a data COG
+  asset means COG. Keyword arguments (`fetch=`, `info=`, `resolution=`, `root=` ...) go to the reader. Raises
   `UnknownProfile` naming the profile prefixes the document has when no reader matches.
   """
   doc = json.loads(collection) if isinstance(collection, (str, bytes)) else collection
@@ -43,3 +48,5 @@ def for_collection(collection: dict | str | bytes, **kwargs) -> Reader:
 
 
 register("erddap", lambda doc: "erddap:protocol" in doc, ErddapGrid)
+register("h3", is_h3_collection, H3Reader)
+register("cog", has_cog_asset, CogReader)
