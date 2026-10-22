@@ -1,0 +1,62 @@
+{
+  "table": {
+    "columnNames": [
+      "Row Type",
+      "Variable Name",
+      "Attribute Name",
+      "Data Type",
+      "Value"
+    ],
+    "columnTypes": [
+      "String",
+      "String",
+      "String",
+      "String",
+      "String"
+    ],
+    "rows": [
+      [
+        "attribute",
+        "NC_GLOBAL",
+        "time_coverage_duration",
+        "String",
+        "P0Y1M0DT0H0M0S"
+      ],
+      [
+        "attribute",
+        "NC_GLOBAL",
+        "time_coverage_end",
+        "String",
+        "2026-06-26T12:00:00Z"
+      ],
+      [
+        "attribute",
+        "NC_GLOBAL",
+        "time_coverage_start",
+        "String",
+        "2002-08-29T12:00:00Z"
+      ],
+      [
+        "dimension",
+        "time",
+        "",
+        "double",
+        "nValues=1088, evenlySpaced=false, averageSpacing=8 days 0h 7m 57s"
+      ],
+      [
+        "attribute",
+        "time",
+        "actual_range",
+        "double",
+        "1.0306224E9, 1.7824752E9"
+      ],
+      [
+        "attribute",
+        "time",
+        "units",
+        "String",
+        "seconds since 1970-01-01T00:00:00Z"
+      ]
+    ]
+  }
+}
