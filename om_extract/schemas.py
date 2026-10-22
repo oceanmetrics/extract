@@ -57,3 +57,8 @@ def validate(name: str, doc) -> list[str]:
   validator = Draft202012Validator(load_schema(name))
   errors = sorted(validator.iter_errors(doc), key=lambda e: [str(p) for p in e.absolute_path])
   return [f"/{'/'.join(str(p) for p in e.absolute_path)}: {e.message}" for e in errors]
+
+
+def list_profiles() -> list[str]:
+  """Names of the schemas found in `schema_dir()` (`<name>.schema.json`), sorted."""
+  return sorted(p.name.removesuffix(".schema.json") for p in schema_dir().glob("*.schema.json"))

@@ -75,3 +75,12 @@ def test_validate_returns_path_and_message_per_error(tmp_path, monkeypatch):
   assert len(errs) == 2
   assert any(e.startswith("/a: ") and "'x'" in e for e in errs)
   assert any(e.startswith("/: ") and "'b'" in e for e in errs)
+
+
+def test_list_profiles_returns_sorted_schema_names_only(tmp_path, monkeypatch):
+  d = _make(tmp_path, "zeta")
+  (d / "alpha.schema.json").write_text(json.dumps(TINY))
+  (d / "notes.txt").write_text("not a schema")
+  (d / "other.json").write_text("{}")
+  monkeypatch.setenv("OM_SCHEMAS_DIR", str(d))
+  assert schemas.list_profiles() == ["alpha", "zeta"]
