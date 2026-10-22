@@ -1,0 +1,29 @@
+[project]
+name = "om-extract"
+version = "0.0.1"
+description = "Ocean Metrics extraction engine: one rule for summarising a layer by places into indicator values"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Ocean Metrics LLC", email = "ben@oceanmetrics.io" }]
+requires-python = ">=3.12"
+dependencies = [
+  "duckdb>=1.4",
+  "pyarrow>=21",
+  "numpy>=1.26",
+]
+
+[project.scripts]
+om-extract = "om_extract.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["om_extract"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
