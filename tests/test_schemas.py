@@ -84,3 +84,29 @@ def test_list_profiles_returns_sorted_schema_names_only(tmp_path, monkeypatch):
   (d / "other.json").write_text("{}")
   monkeypatch.setenv("OM_SCHEMAS_DIR", str(d))
   assert schemas.list_profiles() == ["alpha", "zeta"]
+
+
+def test_cwd_sibling_platform_is_found_when_the_package_root_has_none(tmp_path, monkeypatch):
+  # om-extract installed in site-packages (no sibling platform there); the app's own sibling platform is used
+  monkeypatch.delenv("OM_SCHEMAS_DIR", raising=False)
+  install = tmp_path / "site-packages" / "om_extract"
+  install.mkdir(parents=True)
+  app = tmp_path / "apps" / "indicators"
+  app.mkdir(parents=True)
+  sibling = tmp_path / "apps" / "platform" / "packages" / "catalog" / "schemas"
+  sibling.mkdir(parents=True)
+  from om_extract import schemas
+  assert schemas.schema_dir(root=install, cwd=app) == sibling
+
+
+def test_cwd_node_modules_wins_over_cwd_sibling(tmp_path, monkeypatch):
+  monkeypatch.delenv("OM_SCHEMAS_DIR", raising=False)
+  install = tmp_path / "site-packages" / "om_extract"
+  install.mkdir(parents=True)
+  app = tmp_path / "apps" / "indicators"
+  nm = app / "node_modules" / "@oceanmetrics" / "catalog" / "schemas"
+  nm.mkdir(parents=True)
+  sibling = tmp_path / "apps" / "platform" / "packages" / "catalog" / "schemas"
+  sibling.mkdir(parents=True)
+  from om_extract import schemas
+  assert schemas.schema_dir(root=install, cwd=app) == nm

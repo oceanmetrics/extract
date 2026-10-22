@@ -18,6 +18,7 @@
 - New `om_extract.layers`: `load_collection(path_or_url)` and `dataset_of(collection)` (erddap-places' `toDataset()`).
 - New CLI `om-extract layer info <collection.json> [--info info.json] [--json]`.
 - New dependency: `httpx>=0.28`.
+- `schemas.schema_dir()` also looks relative to the working directory (`node_modules/@oceanmetrics/catalog/schemas`, then `../platform/...`), so an app that installs om-extract from git finds the schemas without `OM_SCHEMAS_DIR`.
 
 # om-extract 0.1.0 (2026-10-22)
 

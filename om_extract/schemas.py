@@ -12,23 +12,29 @@ def _repo_root() -> Path:
   return Path(__file__).resolve().parent.parent
 
 
-def _candidates(root: Path | None = None) -> list[tuple[str, Path]]:
+def _candidates(root: Path | None = None, cwd: Path | None = None) -> list[tuple[str, Path]]:
   root = root or _repo_root()
+  cwd = cwd or Path.cwd()
+  # the package root first (a checkout of extract beside platform), then the working directory (an app such as
+  # indicators that installed om-extract from git: its node_modules or its own sibling platform checkout)
   return [
     (f"${SCHEMA_ENV}", Path(os.environ[SCHEMA_ENV]) if os.environ.get(SCHEMA_ENV) else None),
     ("<repo>/node_modules/@oceanmetrics/catalog/schemas", root / "node_modules" / "@oceanmetrics" / "catalog" / "schemas"),
     ("<repo>/../platform/packages/catalog/schemas", root.parent / "platform" / "packages" / "catalog" / "schemas"),
+    ("<cwd>/node_modules/@oceanmetrics/catalog/schemas", cwd / "node_modules" / "@oceanmetrics" / "catalog" / "schemas"),
+    ("<cwd>/../platform/packages/catalog/schemas", cwd.parent / "platform" / "packages" / "catalog" / "schemas"),
   ]
 
 
-def schema_dir(root: Path | None = None) -> Path:
+def schema_dir(root: Path | None = None, cwd: Path | None = None) -> Path:
   """Directory holding the platform schemas.
 
   In order: `$OM_SCHEMAS_DIR` (authoritative when set), `<repo>/node_modules/@oceanmetrics/catalog/schemas`
-  (after the npm publish), the sibling checkout `<repo>/../platform/packages/catalog/schemas`. Raises
-  FileNotFoundError naming the three places when none exists.
+  (after the npm publish), the sibling checkout `<repo>/../platform/packages/catalog/schemas`, then the same two
+  relative to the working directory (for an app that installed om-extract from git). Raises FileNotFoundError
+  naming every place when none exists.
   """
-  cands = _candidates(root)
+  cands = _candidates(root, cwd)
   env = cands[0][1]
   if env is not None:
     if env.is_dir():
