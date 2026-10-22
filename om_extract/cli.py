@@ -64,7 +64,7 @@ def _parser() -> argparse.ArgumentParser:
   pa.add_argument("--window", default="published", choices=["published", "live"],
                   help="published (default): the published file's window; live: window(ext, 'all')")
   pa.add_argument("--tries", type=int, default=3, help="tries in a row without a new chunk before a place is given "
-                                                       "up, resting 10, 30, 60 min between (default 3)")
+                                                       "up, resting 10, 30, 60, 120 min between (default 3)")
   return p
 
 
@@ -76,8 +76,12 @@ def _parity(args) -> int:
   kw = {"base": base, "coll": args.coll, "reference_chunks": args.reference_chunks, "fetch_mode": args.fetch,
         "window_mode": args.window}
   if len(places) == 1 and len(args.variable) == 1:
+    from pathlib import Path
+    from om_extract.parity import chunk_count
+    store = args.chunks or str(Path(args.out) / "chunks")
     res = run_with_tries(lambda: run_parity(args.dataset, args.variable[0], places[0], args.out, chunks=args.chunks,
-                                            log=print, **kw), args.tries, log=print)
+                                            log=print, **kw), args.tries, log=print,
+                         progress=lambda: chunk_count(store, args.dataset, args.variable[0], places[0]))
     print(verdict_table(res))
     print(f"wrote {args.out}/parity.json")
     return 0

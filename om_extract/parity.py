@@ -419,12 +419,19 @@ def run_parity(dataset_id: str, variable: str, place_id: str, out: str | Path, *
     "provenance": compare_provenance(prov, ref_prov),
     "bytes": compare_bytes(x.stats_path, ref["parquet"], rows_exact=rows["exact"]),
     "item": compare_item(ref_item, prov),
-    "chunks": compare_chunks(x.fetched, Path(x.chunk_dir), ref_dir),
+    # every chunk the engine computed itself (this try or an earlier one), not only this try's fetches
+    "chunks": compare_chunks([sl for sl in _slices(x) if chunk_name(*sl) not in set(copied)],
+                             Path(x.chunk_dir), ref_dir),
     "engine_seconds": round(engine_s, 1), "total_seconds": round(_time.monotonic() - t_start, 1),
     "duckdb": _duckdb_version(),
   }
   (out / parity_name).write_text(json.dumps(res, indent=2, default=str) + "\n")
   return res
+
+
+def _slices(x) -> list[tuple[str, str]]:
+  """The (start, end) days of a chunked extraction's slices, from its chunk directory's names in plan order."""
+  return [sp for sp in (chunk_span(n) for n in ChunkStore.listing(Path(x.chunk_dir))) if sp]
 
 
 def _duckdb_version() -> str:
@@ -487,8 +494,9 @@ def summary_markdown(results: list[dict], title: str = "Parity: engine vs erddap
   return "\n".join(out) + "\n"
 
 
-# rests between the tries of one place (schedule.ts REST_MS: 10, 30, 60 min) and tries without a new chunk (MAX_ATTEMPTS)
-REST_S = (600, 1800, 3600)
+# rests between the tries of one place (schedule.ts REST_MS: 10, 30, 60, 120 min) and tries in a row without a new
+# chunk (targets.ts MAX_ATTEMPTS)
+REST_S = (600, 1800, 3600, 7200)
 MAX_ATTEMPTS = 3
 
 
@@ -510,7 +518,7 @@ def run_batch(dataset_id: str, variables: list[str], place_ids: list[str], out: 
       while True:
         tries += 1
         t = _time.monotonic()
-        before = _chunk_count(kw.get("chunks") or work / "chunks", dataset_id, var, pid)
+        before = chunk_count(kw.get("chunks") or work / "chunks", dataset_id, var, pid)
         try:
           say(f"== {var} {pid} (try {tries})")
           res = run_parity(dataset_id, var, pid, work, sleep=sleep, log=say,
@@ -520,7 +528,7 @@ def run_batch(dataset_id: str, variables: list[str], place_ids: list[str], out: 
           say(verdict_table(res))
           break
         except Exception as e:  # noqa: BLE001 - a failed place is recorded and the batch goes on
-          after = _chunk_count(kw.get("chunks") or work / "chunks", dataset_id, var, pid)
+          after = chunk_count(kw.get("chunks") or work / "chunks", dataset_id, var, pid)
           fails = 0 if after > before else fails + 1
           say(f"   !! {var} {pid} failed after {_time.monotonic() - t:.0f} s: {e}")
           if fails >= attempts:
@@ -537,21 +545,28 @@ def run_batch(dataset_id: str, variables: list[str], place_ids: list[str], out: 
 
 
 def run_with_tries(fn: Callable[[], dict], attempts: int = MAX_ATTEMPTS, *, rest_s: tuple[float, ...] = REST_S,
-                   sleep: Callable[[float], None] = _time.sleep, log: Callable[[str], None] | None = None) -> dict:
-  """`fn()` until it returns, resting `rest_s` between tries; the last failure is raised after `attempts` tries."""
+                   sleep: Callable[[float], None] = _time.sleep, log: Callable[[str], None] | None = None,
+                   progress: Callable[[], int] | None = None) -> dict:
+  """`fn()` until it returns, resting `rest_s` between tries (the n-th failure in a row rests the n-th rest). With
+  `progress` (a count of finished chunks), a try that finished chunks resets the count, as the runner's schedule
+  does; the last failure is raised after `attempts` tries in a row without progress."""
   say = log or (lambda _: None)
-  for i in range(attempts):
+  fails, tries = 0, 0
+  while True:
+    before = progress() if progress else 0
+    tries += 1
     try:
       return fn()
     except Exception as e:  # noqa: BLE001 - retried, then re-raised
-      if i == attempts - 1:
+      after = progress() if progress else 0
+      fails = 0 if after > before else fails + 1
+      if fails >= attempts:
         raise
-      wait = rest_s[min(i, len(rest_s) - 1)]
-      say(f"   !! try {i + 1} failed: {e}; resting {wait:.0f} s")
+      wait = rest_s[min(max(fails - 1, 0), len(rest_s) - 1)]
+      say(f"   !! try {tries} failed: {e}; resting {wait:.0f} s")
       sleep(wait)
-  raise AssertionError("unreachable")
 
 
-def _chunk_count(root: str | Path, dataset_id: str, variable: str, place_id: str) -> int:
+def chunk_count(root: str | Path, dataset_id: str, variable: str, place_id: str) -> int:
   d = Path(root) / dataset_id / variable / file_safe(place_id)
   return sum(len(ChunkStore.listing(k)) for k in d.iterdir() if k.is_dir()) if d.is_dir() else 0

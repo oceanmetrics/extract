@@ -1,3 +1,27 @@
+# om-extract 0.5.0 (2026-10-22)
+
+- New `om_extract.chunks`: erddap-places' chunk store (`<root>/<dataset>/<variable>/<place>/<mask_key>/<start>_<end>.parquet`,
+  the runner's `PRECOMPUTE_CHUNKS` layout), `mask_key()` (the TS `maskKey()`, so a key names the runner's directory),
+  `plan_chunks(existing, window, chunk_days)` (keep / todo / drop / supersede as `planChunks()`), `window()` (`window(ext,
+  'all')`), `ChunkStore`, `write_atomic()`.
+- `engine.extract()` gains `chunks=DIR` (and `stats_path=`, `existing=`, `threads=`, `should_stop=`): precompute
+  `computeOne()` through the chunk store. The live extent is required (5 tries, then an error), axes come from the
+  server, the largest lobe sets the chunk size for every lobe, only missing chunks are fetched, each chunk is
+  aggregated by DuckDB `COPY` and written atomically, slabs are deleted, and the stats file is
+  `COPY (SELECT DISTINCT * ... ORDER BY date[, class])` with ZSTD in one row group, zero rows included.
+  `t0`/`t1` are optional with `chunks=` (default: the whole record). New `engine.live_extent()`, `download()`,
+  `select_list()`, `ts_sql()`, `provenance_text()`, `StopRequested`.
+- `engine.stats_provenance()`: the TS key order, `griddap_chunks` from the chunk instants of a chunked run, `sql`
+  rendered with the TS slab placeholder, `erddap_version` left out when the collection has none.
+- New `om_extract.places`: `place_geometry(place_id, coll, base)` reads one WKB row of `<base>/<coll>/places.parquet`
+  (DuckDB, `place_id` pushed down, HTTP ranges), `place_ids()`, `place_collection()` from `places_index`.
+- New `om_extract.parity` and CLI `om-extract parity --dataset --variable --place [--chunks] [--out] [--base] [--coll]
+  [--reference-chunks] [--fetch all|none|last:N] [--window published|live] [--tries]`: the engine against
+  erddap-places' published stats (rows per column exact or max abs / ulp difference, provenance keys, item properties,
+  parquet bytes, fetched chunks against the runner's); several places or variables write
+  `<out>/<variable>/parity_<place>.json` and `<out>/summary.md`.
+- Tests marked `live` reach real servers and run only with `OM_LIVE=1`.
+
 # om-extract 0.4.0 (2026-10-22)
 
 - New `om_extract.engine`: `extract(collection, place_id, geometry_wkb, var, t0, t1, *, fetch=None, coll=None,

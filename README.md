@@ -127,6 +127,73 @@ x = extract(collection, "NMS:CINMS", wkb_bytes, "CRW_SST", "2026-09-01", "2026-0
 contract.write_values(values_rows(x, stat="mean_wt"), "out", provenance_for(x, "0.4.0"))
 ```
 
+## Parity
+
+`om-extract parity` runs the engine live for one place over the window of erddap-places' published file, downloads
+that file with its provenance and STAC item, and says where they agree. It is the gate of build week 1: the engine's
+stats against the runner's.
+
+```sh
+uv run om-extract parity --dataset dhw_5km --variable CRW_SST --place NMS:CINMS --out parity/cinms \
+  --reference-chunks ~/actions-runner/erddap-places/_work/erddap-places/precompute-chunks --fetch all
+# every NMS: place, both variables: <out>/<variable>/parity_<place>.json and <out>/summary.md
+uv run om-extract parity --dataset dhw_5km --variable CRW_SST --variable CRW_BAA --place all --out parity/batch \
+  --reference-chunks ~/actions-runner/erddap-places/_work/erddap-places/precompute-chunks --fetch last:3
+```
+
+| Option | |
+|---|---|
+| `--chunks DIR` | the engine's chunk store (default `<out>/chunks`) |
+| `--out DIR` | `parity.json`, the engine's stats file and provenance in `engine/`, the published ones in `ref/` |
+| `--base URL` | the gazetteer (default `https://storage.oceanmetrics.io/gazetteer`, or a local copy): `erddap/<dataset>/collection.json`, `<coll>/places.parquet`, `stats/...` |
+| `--reference-chunks DIR` | the runner's chunk store (`PRECOMPUTE_CHUNKS`), read only |
+| `--fetch all\|none\|last:N` | with `--reference-chunks`, which chunks the engine computes itself; the rest are copied from the runner's store |
+| `--window published\|live` | the published file's `start_date`..`end_date` (default), or `window(ext, 'all')` |
+| `--tries N` | tries in a row without a new chunk before a place is given up, resting 10, 30, 60 min between (default 3) |
+
+It compares:
+
+- **rows**, matched by `date` (categorical: `date, class`), every column: `==` for `n`, the ids and the date; floats
+  exact first, else the rows that differ, the largest absolute and relative difference and the largest distance in
+  ulps. Duplicated keys on either side are counted. The verdict is `exact`, `float sums differ (max rel x)` (keys,
+  integers, strings, `min`, `max`, `p10`, `p90` equal; only order-dependent sums differ, by at most 1e-12 relative)
+  or `differs`;
+- **provenance**, key by key (which differ, and for a list its first differing element); `generated` always differs;
+- **item** properties stated from the provenance (`start_datetime`, `table:row_count`, `erddap-places:*`);
+- **bytes** of the parquet, and why not (the writer's version, row groups, schema, codecs, values);
+- **chunks**: the mask key against the runner's directory name, and every chunk the engine fetched against the
+  runner's chunk of the same name.
+
+**The chunk store is the runner's.** `om_extract.chunks` keeps chunk rows exactly where and as precompute does:
+
+```
+<chunks>/<dataset_id>/<variable>/<place_id>/<mask_key>/<start>_<end>.parquet     # stats.ts:357-360
+<chunks>/.slabs/<dataset_id>/<variable>/<place_id>/lobe<i>_<start>_<end>.parquet   # precompute/.cache: deleted once aggregated
+```
+
+`mask_key()` is `maskKey()` (`stats.ts:289-294`) character for character: sha1 over `JSON.stringify([baseUrl,
+datasetId, depth ?? null, name, valueExpr, statsTemplate])`, then `${lon},${lat},${weight};` per mask cell with
+JavaScript's number printing, first 12 hex. So the engine names the runner's directory (`NMS:CINMS` x `CRW_SST`:
+`a91ae222cbfe`, a test), and a store copied from the runner resumes in the engine. `plan_chunks()` is `planChunks()`:
+done chunks in the window are kept whatever size they were cut at, a short last chunk is refetched to the new end and
+superseded, gaps are cut at the chunk size, other files dropped. With `--reference-chunks` the engine plans from the
+runner's chunk names (so its slices, `griddap_chunks` and `griddap_requests` are the runner's, mixed sizes included),
+fetches what `--fetch` says and compares each fetched chunk with the runner's.
+
+`extract(..., chunks=DIR)` is that run in Python (`engine.extract_chunked()`, `computeOne()`): the live extent from
+`info/<id>/index.json` (5 tries, 5/20/60/120 s apart, a 4xx at once; no fallback to the catalog), axes from the
+server per lobe (`fetchAxis`, 3 tries of 120 s), the chunk size from the largest lobe's axis cells for every lobe,
+two requests in flight 0.75 s apart, each slab downloaded with one retry, aggregated by
+`COPY (SELECT <selectList> FROM (<template over SELECT DISTINCT * FROM read_parquet([lobe slabs])>))` to
+`<chunk>.tmp` and renamed, and the stats file written by
+`COPY (SELECT *, place_id, dataset_id, variable FROM (SELECT DISTINCT * FROM read_parquet([chunks])) ORDER BY date[, class]) TO ... (FORMAT PARQUET, COMPRESSION ZSTD)`
+(one row group). A zero-row place writes the file and its provenance. The provenance has the TS keys in the TS order,
+`griddap_chunks` from the chunk instants and `sql` rendered with the TS's slab placeholder, written as
+`JSON.stringify(prov, null, 2)` (`provenance_text()`).
+
+The place geometry comes from the gazetteer by range: `places.place_geometry(place_id, coll, base)` reads one WKB row
+of `<base>/<coll>/places.parquet` through DuckDB (`place_id =` pushed down to the row groups, HTTP ranges).
+
 ## Commands
 
 ```sh

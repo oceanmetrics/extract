@@ -240,3 +240,15 @@ def test_the_summary_shows_columns_that_are_not_exact():
   r = {"variable": "v", "place_id": "P", "rows": c, "rows_verdict": rows_verdict(c), "provenance": {"differ": {}},
        "bytes": {"equal": False}, "chunks": {"compared": 0}, "engine_seconds": 1.0}
   assert "mean (max 4.4e-16 (1 ulp), 1 rows)" in summary_markdown([r])
+
+
+def test_a_try_that_finishes_chunks_resets_the_count():
+  # schedule.ts: a place is given up only after `attempts` tries in a row that finish no chunk
+  done, sleeps = [0], []
+
+  def fn():
+    done[0] += 1 if len(sleeps) < 3 else 0      # the first three tries each finish a chunk, then none do
+    raise OSError("down")
+  with pytest.raises(OSError):
+    run_with_tries(fn, 2, rest_s=(1, 2), sleep=sleeps.append, progress=lambda: done[0])
+  assert sleeps == [1, 1, 1, 1]   # three tries with progress, then two without: the second gives up
