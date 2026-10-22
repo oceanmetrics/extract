@@ -11,8 +11,18 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extract
     steps:
+      # the schemas come from the sibling checkout <repo>/../platform (see om_extract/schemas.py)
       - uses: actions/checkout@v4
+        with:
+          path: extract
+      - uses: actions/checkout@v4
+        with:
+          repository: oceanmetrics/platform
+          path: platform
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"

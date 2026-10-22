@@ -23,8 +23,34 @@ same mask; a parity test asserts identical numbers.
 ```sh
 uv sync --group dev
 uv run pytest -q
-uv run om-extract
+uv run om-extract --version
 ```
+
+## Notebooks
+
+Each workflow notebook (`*.qmd` in `oceanmetrics/workflows`) carries an `om:` block in its YAML front matter, validated
+against the platform schema `om-notebook` (`packages/catalog/schemas/om-notebook.schema.json`):
+
+```yaml
+om:
+  target_name: aquamaps_eov          # unique, snake_case
+  workflow_type: publish             # ingest | extract | publish | release | reference | explore
+  dependency: []                     # target_names that run first
+  output: https://storage.oceanmetrics.io/atlas/aquamaps_eov/provenance.json   # the manifest = the done marker
+  products:
+    - {href: https://storage.oceanmetrics.io/atlas/aquamaps_eov/collection.json, kind: stac-collection}
+  schedule: manual                   # or a five-field cron
+  status: active                     # active | archived | draft
+  description: One sentence for the index card.
+```
+
+```sh
+uv run om-extract notebooks check <dir>                       # exit 1 on schema, duplicate, unknown-dependency or cycle errors
+uv run om-extract notebooks index <dir> --title "Workflows"   # writes index.qmd, _om/order.json, _om/dag.mmd
+```
+
+The schemas are found in `$OM_SCHEMAS_DIR`, else `node_modules/@oceanmetrics/catalog/schemas`, else the sibling
+checkout `../platform/packages/catalog/schemas`.
 
 ## Public repo
 

@@ -13,7 +13,7 @@ Regions copies, no PPOW geometry. Fixtures are synthetic or from public sources.
 uv sync --group dev
 uv run pytest -q                    # must be green before every commit
 uv run pytest -q tests/test_package.py -k version
-uv run om-extract
+uv run om-extract --version
 ```
 
 ## Conventions
@@ -21,6 +21,12 @@ uv run om-extract
 - 2-space indentation, snake_case, lowercase comments.
 - One pytest per rule, with a small synthetic fixture asserting the exact output. A bug fix adds a named regression
   test. Pytest green before every commit.
+
+## Schemas
+
+`om_extract/schemas.py` resolves the platform JSON Schemas (`$OM_SCHEMAS_DIR`, else `node_modules/@oceanmetrics/catalog/schemas`,
+else the sibling checkout `../platform/packages/catalog/schemas`) and validates documents against them; CI checks out
+`oceanmetrics/platform` beside this repo for that. Never copy a schema into this repo.
 
 ## Structure first
 
