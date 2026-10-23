@@ -194,6 +194,18 @@ two requests in flight 0.75 s apart, each slab downloaded with one retry, aggreg
 The place geometry comes from the gazetteer by range: `places.place_geometry(place_id, coll, base)` reads one WKB row
 of `<base>/<coll>/places.parquet` through DuckDB (`place_id =` pushed down to the row groups, HTTP ranges).
 
+**What parity found (2026-10-22, `dhw_5km`).** The order-independent columns (`date`, `n`, `min`, `max`, `p10`, `p90`,
+the ids) match exactly on every chunk the engine recomputed (85 CINMS chunks). `mean`, `mean_wt`, `sd` and
+`weight_sum` differ in the last bits (at most 1.1e-13 absolute): DuckDB's multi-threaded aggregates add in a
+different order on every run, the runner's included (the same slab and mask twice give different sums on half the
+days), so the published sums are one draw that no rerun reproduces. The engine runs DuckDB with one thread
+(`threads=1`), which makes its own runs reproducible. Given the runner's chunk rows, the engine's plan reproduces every
+published `griddap_chunks` and its writer, under DuckDB 1.5.5 (the runner's), writes 32 of the 36 CRW_SST / CRW_BAA
+files byte for byte; the other 4 hold the same rows with a duplicated date in the other order. Python DuckDB 2.0
+writes other bytes (its version string; the constant id columns `required`). Six published files carry a date twice:
+a chunk that ends on a day missing from the ERDDAP time axis is snapped to the next day, the next chunk's first, and
+`SELECT DISTINCT` keeps both rows because their sums differ in the last bits.
+
 ## Commands
 
 ```sh
