@@ -1,3 +1,13 @@
+# om-extract 0.6.1 (2026-10-23)
+
+- New `om_extract.storage`, the python twin of `@oceanmetrics/catalog/storage` (platform catalog 0.5.1, build week 6
+  step 0): the hosts `STORAGE_HOST`, `S3_PATH_STYLE`, `S3_VIRTUAL_HOST`, `WORKER_PREVIEW` (`STORAGE_HOSTS` by name),
+  `DEFAULT_STORAGE_HOST` (path-style S3 until the DNS cutover flips it), `storage_url(key, host=, api_key=)`,
+  `rewrite_storage_urls(value, from_, to)` (text, or a JSON value walked; any other host untouched),
+  `rewrite_storage_urls_counted()`, `count_storage_urls()`, `parse_storage_host()`, `resolve_storage_host()` and
+  `storage_host_from_env()` (the `OM_STORAGE` override). Held to the platform's case table
+  (`packages/catalog/fixtures/storage/cases.json`) by `tests/test_storage.py`.
+
 # om-extract 0.6.0 (2026-10-23)
 
 - New Copernicus Marine reader `readers.copernicus.CopernicusReader(dataset_id, variable, *, info=None, subset=None,

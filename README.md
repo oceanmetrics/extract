@@ -445,6 +445,21 @@ for the subset (`tests/fixtures_copernicus.py`, ported from indicators' fixture 
 Toolbox or a login; indicators keeps a test that the producer's output folder is byte for byte what it wrote before
 the move.
 
+## Storage urls
+
+`om_extract.storage` is where the public bucket is read, the twin of `@oceanmetrics/catalog/storage` (same constants,
+same case table). A pipeline builds its urls with `storage_url("indicators/")` and never keeps a base of its own, so
+the storage cutover is one setting: `DEFAULT_STORAGE_HOST` (path-style S3 until the DNS cutover of
+`storage.oceanmetrics.io`), or per run `OM_STORAGE=storage|s3|preview|<https url>` read once by
+`storage_host_from_env()`.
+
+```python
+from om_extract.storage import rewrite_storage_urls, storage_host_from_env, storage_url
+
+base = storage_url("indicators/", host=storage_host_from_env())
+doc = rewrite_storage_urls(doc, "S3_PATH_STYLE", "STORAGE_HOST")   # hrefs only; ERDDAP, Marine Regions untouched
+```
+
 ## Notebooks
 
 Each workflow notebook (`*.qmd` in `oceanmetrics/workflows`) carries an `om:` block in its YAML front matter, validated
