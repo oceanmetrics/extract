@@ -1,6 +1,6 @@
 [project]
 name = "om-extract"
-version = "0.6.2"
+version = "0.6.3"
 description = "Ocean Metrics extraction engine: one rule for summarising a layer by places into indicator values"
 readme = "README.md"
 license = "MIT"

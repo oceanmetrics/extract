@@ -1,13 +1,16 @@
 """om_extract.storage: the storage url rule, held to the platform's case table (the TS twin's) and its own cases."""
 import json
+import os
 from pathlib import Path
 
 import pytest
 
 from om_extract import storage as st
 
-# the case table of @oceanmetrics/catalog/storage, from the sibling platform checkout (CI checks it out beside this repo)
-CASES_PATH = Path(__file__).resolve().parents[2] / "platform/packages/catalog/fixtures/storage/cases.json"
+# the case table of @oceanmetrics/catalog/storage, from the sibling platform checkout (CI checks it out beside this repo);
+# OM_STORAGE_CASES points at another copy (a platform branch in a worktree)
+CASES_PATH = Path(os.environ.get("OM_STORAGE_CASES") or
+                  Path(__file__).resolve().parents[2] / "platform/packages/catalog/fixtures/storage/cases.json")
 CASES = json.loads(CASES_PATH.read_text()) if CASES_PATH.exists() else {"parse": [], "storageUrl": [], "rewrite": []}
 needs_cases = pytest.mark.skipif(not CASES_PATH.exists(), reason=f"{CASES_PATH} not found (the platform checkout)")
 
@@ -18,7 +21,8 @@ def test_the_hosts_are_the_ts_constants():
   assert st.S3_VIRTUAL_HOST == "https://oceanmetrics.io-public.s3.amazonaws.com"
   assert st.WORKER_PREVIEW == "https://om-gazetteer.ben-f07.workers.dev"
   assert list(st.STORAGE_HOSTS) == ["storage", "s3", "s3-virtual", "preview"]
-  assert st.DEFAULT_STORAGE_HOST == st.S3_PATH_STYLE
+  assert st.DEFAULT_STORAGE_HOST == st.STORAGE_HOST  # since the cutover of 2026-10-23 (S3_PATH_STYLE in 0.6.1)
+  assert st.storage_url("indicators/indicators.json") == "https://storage.oceanmetrics.io/indicators/indicators.json"
   assert st.STORAGE_ENV == "OM_STORAGE"
 
 

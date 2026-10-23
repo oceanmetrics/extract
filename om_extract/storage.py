@@ -13,9 +13,9 @@ import urllib.parse
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-#: the public host: the om-gazetteer Worker over R2 (after the DNS cutover; before it, Caddy 302s to S3)
+#: the public host: the om-gazetteer Worker over R2 (since the cutover of 2026-10-23; before it, Caddy 302'd to S3)
 STORAGE_HOST = "https://storage.oceanmetrics.io"
-#: the S3 bucket, path-style: what the apps and pipelines read today
+#: the S3 bucket, path-style: what the apps and pipelines read until the cutover; written until the freeze
 S3_PATH_STYLE = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public"
 #: the S3 bucket, virtual-hosted style: a legacy form some older hrefs carry
 S3_VIRTUAL_HOST = "https://oceanmetrics.io-public.s3.amazonaws.com"
@@ -27,9 +27,10 @@ STORAGE_HOSTS = {"storage": STORAGE_HOST, "s3": S3_PATH_STYLE, "s3-virtual": S3_
 _CONSTANT_NAMES = {"STORAGE_HOST": STORAGE_HOST, "S3_PATH_STYLE": S3_PATH_STYLE, "S3_VIRTUAL_HOST": S3_VIRTUAL_HOST,
                    "WORKER_PREVIEW": WORKER_PREVIEW}
 
-#: the host every storage url uses unless a setting overrides it: path-style S3 until the DNS cutover of
-#: storage.oceanmetrics.io (week 6 step 2), which flips this one line to STORAGE_HOST (with the TS twin)
-DEFAULT_STORAGE_HOST = S3_PATH_STYLE
+#: the host every storage url uses unless a setting overrides it: storage.oceanmetrics.io since the cutover of
+#: 2026-10-23 (week 6 step 2; path-style S3 in 0.6.1 and 0.6.2), flipped with the TS twin (catalog 0.6.0). a rollback is
+#: OM_STORAGE=s3 per run, or this line flipped back in a release
+DEFAULT_STORAGE_HOST = STORAGE_HOST
 
 #: the environment variable a run reads once for its override
 STORAGE_ENV = "OM_STORAGE"

@@ -1,3 +1,13 @@
+# om-extract 0.6.3 (2026-10-23)
+
+- `om_extract.storage.DEFAULT_STORAGE_HOST` is now `STORAGE_HOST` (`https://storage.oceanmetrics.io`), flipped with
+  `@oceanmetrics/catalog` 0.6.0. Why: the storage cutover of 2026-10-23 is done (`storage.oceanmetrics.io` is served by
+  the om-gazetteer Worker from R2, and `platform/scripts/storage-check.sh` passes 21 of 21 on it), so every
+  `storage_url()` without a host, and every run without `OM_STORAGE`, reads the bucket from the storage host. Rollback:
+  `OM_STORAGE=s3` per run.
+- tests: `OM_STORAGE_CASES` points `tests/test_storage.py` at another copy of the platform's case table (a branch in a
+  worktree); the default stays the sibling checkout.
+
 # om-extract 0.6.2 (2026-10-23)
 
 - DuckDB pinned to exactly 1.5.5 (was `>=1.4`, resolved to 2.0.0), the runner's version: the parity criterion asks for
