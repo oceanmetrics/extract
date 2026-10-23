@@ -37,8 +37,12 @@ class FakeErddap:
   """`fetch(url) -> bytes` for the synthetic grid; `slabs` lists each slab request as `t0..t1` (days) per lobe."""
 
   def __init__(self, start: str = "2026-01-01T12:00:00Z", end: str = "2026-04-10T12:00:00Z", value=doy,
-               info_error: Exception | None = None):
+               info_error: Exception | None = None, missing: tuple[str, ...] = (), request_value=None):
+    """`missing`: days the time axis lacks (a constraint on one snaps to the next day, as ERDDAP did for dhw_5km's
+    2024-07-25); `request_value(t0_day, day, lat, lon)` replaces `value` when a cell's value should depend on the
+    request (two requests of one day giving rows that differ in the last bits, as the runner's parallel sums do)."""
     self.start, self.end, self.value, self.info_error = start, end, value, info_error
+    self.missing, self.request_value = set(missing), request_value
     self.log: list[str] = []
     self.slabs: list[str] = []
 
@@ -59,15 +63,24 @@ class FakeErddap:
     m = _SLAB.search(url)
     if m:
       var, t0, t1, la1, la0, lo0, lo1 = m.groups()
+      d0, d1 = self.snap(t0[:10]), self.snap(t1[:10])
       self.slabs.append(f"{t0[:10]}..{t1[:10]}")
-      return self.slab(var, t0[:10], t1[:10], float(la1), float(la0), float(lo0), float(lo1))
+      return self.slab(var, d0, d1, float(la1), float(la0), float(lo0), float(lo1), t0[:10])
     raise ErddapError(f"404 Not Found from ERDDAP: unexpected request {url}")
 
-  def slab(self, var, d0, d1, la1, la0, lo0, lo1) -> bytes:
+  def snap(self, d: str) -> str:
+    """A constraint day on the axis: a missing day snaps to the next one."""
+    x = date.fromisoformat(d)
+    while x.isoformat() in self.missing:
+      x += timedelta(days=1)
+    return x.isoformat()
+
+  def slab(self, var, d0, d1, la1, la0, lo0, lo1, asked: str = "") -> bytes:
     days = []
     d = date.fromisoformat(d0)
     while d <= date.fromisoformat(d1):
-      days.append(d.isoformat())
+      if d.isoformat() not in self.missing:
+        days.append(d.isoformat())
       d += timedelta(days=1)
     lats = centres(la0, la1, -89.5, 89.5)[::-1]
     lons = centres(lo0, lo1, -179.5, 179.5)
@@ -76,7 +89,8 @@ class FakeErddap:
       "time": pa.array([datetime.fromisoformat(t + "T12:00:00+00:00") for t, _, _ in rows], pa.timestamp("ms", tz="UTC")),
       "latitude": pa.array([r[1] for r in rows], pa.float32()),
       "longitude": pa.array([r[2] for r in rows], pa.float32()),
-      var: pa.array([self.value(t, la, lo) for t, la, lo in rows], pa.float64()),
+      var: pa.array([self.request_value(asked, t, la, lo) if self.request_value else self.value(t, la, lo)
+                     for t, la, lo in rows], pa.float64()),
     })
     sink = pa.BufferOutputStream()
     pq.write_table(tab, sink)

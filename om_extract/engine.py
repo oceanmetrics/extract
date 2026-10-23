@@ -362,6 +362,34 @@ def select_list(categorical: bool) -> str:
           else 'date, n, mean, mean_wt, sd, "min", "max", p10, p90, weight_sum')
 
 
+# a chunk file's span from its name, in SQL (`<start>_<end>.parquet`)
+_SPAN_START = r"regexp_extract(filename, '(\d{4}-\d{2}-\d{2})_\d{4}-\d{2}-\d{2}\.parquet$', 1)::DATE"
+_SPAN_END = r"regexp_extract(filename, '\d{4}-\d{2}-\d{2}_(\d{4}-\d{2}-\d{2})\.parquet$', 1)::DATE"
+
+
+def assemble_sql(chunk_files: list[Path], out: str | Path, place_id: str, dataset_id: str, var: str,
+                 categorical: bool) -> str:
+  """The `COPY` that writes the stats file from the chunk files (stats.ts:401-409, with one rule more).
+
+  As the TS: every chunk's rows plus `place_id`, `dataset_id`, `variable`, DISTINCT, ordered by `date` (categorical
+  `date, class`), ZSTD, one row group. The rule more: **a day belongs to the chunk whose span holds it.** A chunk whose
+  end falls on a day the ERDDAP time axis lacks gets its end snapped by the server to the next day, the next chunk's
+  first; the TS keeps both rows of that day, and as their sums differ in the last bits (parallel aggregation) its
+  `SELECT DISTINCT` does not merge them (six published dhw_5km files carry such a day twice). Here rows outside their
+  chunk's `<start>..<end>` are dropped, and should two kept chunks still overlap (cut at two sizes from one start),
+  one row per key is kept, the one of the first file by name. A file without such a day is written exactly as the TS
+  writes it."""
+  order = "date, class" if categorical else "date"
+  return f"""COPY (
+  SELECT *, {_sq(place_id)} AS place_id, {_sq(dataset_id)} AS dataset_id, {_sq(var)} AS variable
+  FROM (
+    SELECT * EXCLUDE (filename) FROM read_parquet({_files_list(chunk_files)}, filename = true)
+    WHERE date BETWEEN {_SPAN_START} AND {_SPAN_END}
+    QUALIFY row_number() OVER (PARTITION BY {order} ORDER BY filename) = 1
+  ) ORDER BY {order}
+) TO {_sq(out)} (FORMAT PARQUET, COMPRESSION ZSTD)"""
+
+
 def _sq(s: str | Path) -> str:
   return "'" + str(s).replace("'", "''") + "'"
 
@@ -530,16 +558,11 @@ def extract_chunked(collection: dict | str | Path, place_id: str, geometry_wkb: 
     if any(not chunk_files[j].exists() for _, j in todo):
       raise StopRequested("stopped at the run deadline")
 
-    # 6. the file: every chunk's rows, oldest first. DISTINCT again: two chunks snapped onto the same step of a coarse
-    # axis give that step's row twice, identical
-    order = "date, class" if cat else "date"
+    # 6. the file: every chunk's rows, oldest first, each day once (assemble_sql())
     out = Path(stats_path) if stats_path else store.root / ".out" / ds.dataset_id / var / f"{place_id}.parquet"
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp_out = out.with_name(out.name + ".tmp")
-    con.execute(f"""COPY (
-  SELECT *, {_sq(place_id)} AS place_id, {_sq(ds.dataset_id)} AS dataset_id, {_sq(var)} AS variable
-  FROM (SELECT DISTINCT * FROM read_parquet({_files_list(chunk_files)})) ORDER BY {order}
-) TO {_sq(tmp_out)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+    con.execute(assemble_sql(chunk_files, tmp_out, place_id, ds.dataset_id, var, cat))
     os.replace(tmp_out, out)
     n = int(con.execute(f"SELECT count(*) AS n FROM read_parquet({_sq(out)})").fetchone()[0])
   finally:

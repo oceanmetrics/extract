@@ -187,7 +187,7 @@ two requests in flight 0.75 s apart, each slab downloaded with one retry, aggreg
 `COPY (SELECT <selectList> FROM (<template over SELECT DISTINCT * FROM read_parquet([lobe slabs])>))` to
 `<chunk>.tmp` and renamed, and the stats file written by
 `COPY (SELECT *, place_id, dataset_id, variable FROM (SELECT DISTINCT * FROM read_parquet([chunks])) ORDER BY date[, class]) TO ... (FORMAT PARQUET, COMPRESSION ZSTD)`
-(one row group). A zero-row place writes the file and its provenance. The provenance has the TS keys in the TS order,
+(one row group), with one rule more than the TS: a row outside its chunk's `<start>..<end>` is dropped and one row per key is kept (`assemble_sql()`; see below). DuckDB runs with one thread. A zero-row place writes the file and its provenance. The provenance has the TS keys in the TS order,
 `griddap_chunks` from the chunk instants and `sql` rendered with the TS's slab placeholder, written as
 `JSON.stringify(prov, null, 2)` (`provenance_text()`).
 
@@ -195,16 +195,20 @@ The place geometry comes from the gazetteer by range: `places.place_geometry(pla
 of `<base>/<coll>/places.parquet` through DuckDB (`place_id =` pushed down to the row groups, HTTP ranges).
 
 **What parity found (2026-10-22, `dhw_5km`).** The order-independent columns (`date`, `n`, `min`, `max`, `p10`, `p90`,
-the ids) match exactly on every chunk the engine recomputed (85 CINMS chunks). `mean`, `mean_wt`, `sd` and
-`weight_sum` differ in the last bits (at most 1.1e-13 absolute): DuckDB's multi-threaded aggregates add in a
-different order on every run, the runner's included (the same slab and mask twice give different sums on half the
-days), so the published sums are one draw that no rerun reproduces. The engine runs DuckDB with one thread
-(`threads=1`), which makes its own runs reproducible. Given the runner's chunk rows, the engine's plan reproduces every
-published `griddap_chunks` and its writer, under DuckDB 1.5.5 (the runner's), writes 32 of the 36 CRW_SST / CRW_BAA
-files byte for byte; the other 4 hold the same rows with a duplicated date in the other order. Python DuckDB 2.0
-writes other bytes (its version string; the constant id columns `required`). Six published files carry a date twice:
-a chunk that ends on a day missing from the ERDDAP time axis is snapped to the next day, the next chunk's first, and
-`SELECT DISTINCT` keeps both rows because their sums differ in the last bits.
+the ids) match exactly on every chunk the engine recomputed (85 CINMS chunks; PacIOOS then stopped answering).
+`mean`, `mean_wt`, `sd` and `weight_sum` differ in the last bits (at most 1.1e-13 absolute, 2.8e-14 relative):
+DuckDB's multi-threaded aggregates add in a different order on every run, the runner's included (the same slab and
+mask twice give different sums on half the days), so the published sums are one draw that no rerun reproduces. Bit
+for bit on those columns cannot be met by anyone; the engine runs DuckDB with one thread (`threads=1`), so its own
+runs are reproducible to the byte (a test). Given the runner's chunk rows, the engine's plan reproduces every
+published `griddap_chunks` and its writer, under DuckDB 1.5.5 (the runner's), writes the 30 published files without a
+duplicated key byte for byte. Six published files carry a date (categorical: a date and class) twice: a chunk that
+ends on a day missing from the ERDDAP time axis is answered up to the next day, the next chunk's first, and the TS's
+`SELECT DISTINCT` keeps both rows because their sums differ in the last bits. The engine keeps a day only from the
+chunk whose span holds it, one row per key (`assemble_sql()`, a test with a gap in a synthetic axis). Python DuckDB
+2.0 writes other bytes (its version string; the constant id columns `required`). The tally per sanctuary x dataset,
+the criterion proposed for the gate and the commands to resume are in the parity directory's `SUMMARY.md`
+(`/Volumes/msens_big/_big/oceanmetrics/parity/` on the Mac mini).
 
 ## Commands
 

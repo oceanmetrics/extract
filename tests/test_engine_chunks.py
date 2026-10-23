@@ -4,12 +4,13 @@ The cases mirror precompute's chunks.test.ts (first run, a week later, a stopped
 extent is required, axes come from the server, the largest lobe sizes every lobe's chunks, the stats file is one
 DuckDB COPY (DISTINCT, ordered by date or date and class, ZSTD), a zero-row place still writes it."""
 import json
+from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
 from shapely.geometry import MultiPolygon, box
 
-from fixtures_chunks import FakeErddap
+from fixtures_chunks import FakeErddap, doy
 from fixtures_engine import INFO_URL, collection, wkb
 from om_extract.chunks import mask_key
 from om_extract.engine import (StopRequested, download, extract, provenance_text, stats_provenance, ts_sql)
@@ -207,3 +208,40 @@ def test_a_cached_slab_is_reused(tmp_path):
 def test_without_chunks_the_window_is_required():
   with pytest.raises(ValueError, match="t0 and t1 are required"):
     extract(collection(), PID, wkb("square"), "sst")
+
+
+# -- regressions found by the parity runs (2026-10-22) -------------------------------------------------------------------
+def test_a_chunk_end_on_a_missing_axis_day_does_not_give_the_next_day_twice(tmp_path):
+  # dhw_5km lacks 2024-07-25: the chunk ..._2024-07-25 was answered up to 2024-07-26, the next chunk's first day, and
+  # the two rows of 2024-07-26 differed in the last bits, so the runner's DISTINCT kept both (GFNMS, HIHWNMS, MBNMS,
+  # PMNM). Here the axis lacks 2026-01-10; the first chunk is answered up to 01-11 with values 1e-6 off the second's
+  erd = FakeErddap(end="2026-01-20T12:00:00Z", missing=("2026-01-10",),
+                   request_value=lambda asked, d, la, lo: doy(d, la, lo) + (1e-6 if asked == "2026-01-01" else 0.0))
+  x = run(tmp_path, erd, existing=["2026-01-01_2026-01-10.parquet", "2026-01-11_2026-01-20.parquet"])
+  first = pq.read_table(Path(x.chunk_dir) / "2026-01-01_2026-01-10.parquet").to_pylist()
+  assert first[-1]["date"].isoformat() == "2026-01-11"            # the snapped day is in the first chunk's rows
+  rows = x.stats.to_pylist()
+  days = [r["date"].isoformat() for r in rows]
+  assert len(days) == 19 and len(set(days)) == 19 and "2026-01-10" not in days
+  [r11] = [r for r in rows if r["date"].isoformat() == "2026-01-11"]
+  assert r11["n"] == 6 and r11["mean"] == 11.0 and r11["min"] == 11.0   # the second chunk's row, the day's own chunk
+  assert x.rows == 19
+
+
+def test_two_engine_runs_of_one_slab_write_identical_bytes(tmp_path):
+  # DuckDB's multi-threaded sum/avg/stddev add in a new order on every run (the runner's published sums are one draw);
+  # the engine runs DuckDB with one thread so its own runs are reproducible to the byte. 90 days x 2,000 cells of
+  # irrational values: enough rows for a parallel plan to reorder the sums
+  import math as _m
+  geom = MultiPolygon([box(10.1, 20.1, 59.9, 59.9)])            # 50 x 40 = 2,000 cells
+  def val(d, la, lo):
+    return _m.sin(la * 12.9898 + lo * 78.233 + int(d[8:10])) * 43758.5453 % 1 + 20
+
+  def once(sub):
+    return run(tmp_path / sub, FakeErddap(end="2026-03-31T12:00:00Z", value=val), place=geom, pid="TEST:big")
+  a, b = once("a"), once("b")
+  assert a.rows == 90 and a.chunk_days == 50
+  assert Path(a.stats_path).read_bytes() == Path(b.stats_path).read_bytes()
+  for (sa, ea) in a.chunks_at:
+    n = f"{sa[:10]}_{ea[:10]}.parquet"
+    assert (Path(a.chunk_dir) / n).read_bytes() == (Path(b.chunk_dir) / n).read_bytes()

@@ -20,6 +20,12 @@
   erddap-places' published stats (rows per column exact or max abs / ulp difference, provenance keys, item properties,
   parquet bytes, fetched chunks against the runner's); several places or variables write
   `<out>/<variable>/parity_<place>.json` and `<out>/summary.md`.
+- The chunked engine runs DuckDB with one thread (`threads=1`), so two runs of one slab write identical bytes (the
+  runner's multi-threaded sums differ from run to run in the last bits).
+- The stats file keeps a day only from the chunk whose span holds it, one row per key (`engine.assemble_sql()`): a chunk
+  ending on a day missing from the ERDDAP time axis is answered up to the next day, and erddap-places' published files
+  carry that day twice (six of the 36 dhw_5km files). Files without such a day are written exactly as erddap-places
+  writes them (30 of 30 byte for byte under DuckDB 1.5.5).
 - Tests marked `live` reach real servers and run only with `OM_LIVE=1`.
 
 # om-extract 0.4.0 (2026-10-22)

@@ -317,11 +317,12 @@ def compare_chunks(fetched: list[tuple[str, str]], engine_dir: Path, ref_dir: Pa
     if c["missing_in_engine"] or c["extra_in_engine"]:
       rows_diff.append(n)
     for k, v in c["columns"].items():
-      w = cols.setdefault(k, {"exact": True, "n_diff": 0, "max_abs": 0.0, "max_ulps": 0})
+      w = cols.setdefault(k, {"exact": True, "n_diff": 0, "max_abs": 0.0, "max_ulps": 0, "max_rel": 0.0})
       w["exact"] &= v["exact"]
       w["n_diff"] += v["n_diff"]
       w["max_abs"] = max(w["max_abs"], v.get("max_abs", 0.0))
       w["max_ulps"] = max(w["max_ulps"], v.get("max_ulps", 0))
+      w["max_rel"] = max(w["max_rel"], v.get("max_rel", 0.0))
   return {"compared": compared, "exact": exact, "rows_differ": rows_diff, "columns": cols}
 
 
