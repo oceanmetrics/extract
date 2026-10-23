@@ -119,32 +119,89 @@ def compare_rows(engine: pa.Table, ref: pa.Table, keys: tuple[str, ...] | None =
   if engine.column_names != ref.column_names and not schema_diff:
     schema_diff.append(f"column order {engine.column_names} vs {ref.column_names}")
   exact = not missing and not extra and not schema_diff and all(v["exact"] for v in cols.values())
+  keys_only_ref, keys_only_engine = set(gr) - set(ge), set(ge) - set(gr)
   return {
     "keys": list(keys), "rows_engine": engine.num_rows, "rows_ref": ref.num_rows, "paired": len(pairs),
     "missing_in_engine": len(missing), "missing_examples": [_key_str(k) for k in missing[:EXAMPLES]],
     "extra_in_engine": len(extra), "extra_examples": [_key_str(k) for k in extra[:EXAMPLES]],
+    "keys_only_ref": len(keys_only_ref), "keys_only_engine": len(keys_only_engine),
     "duplicate_keys_engine": len(dup_e), "duplicate_keys_ref": len(dup_r),
     "duplicate_examples_ref": [_key_str(k) for k in list(dup_r)[:EXAMPLES]],
     "schema_equal": not schema_diff, "schema_diff": schema_diff, "columns": cols, "exact": exact,
   }
 
 
-# the relative difference below which a float column is "the same sum in another order" (DuckDB's parallel aggregates)
-SUM_ORDER_REL = 1e-12
+# the parity criterion (Ben, ledger 2026-10-23, week 1): the order-dependent sums of DuckDB's aggregates may differ by
+# at most SUM_REL relative, |a - b| / max(|a|, |b|); every other column is `==` (date, n, min, max, p10, p90, class,
+# pct_cells, the ids); the same keys, one row per key in the engine's file (a key the published file carries twice,
+# the duplicated-date bug, is written once by the engine and is no failure); the same schema. byte identity under the
+# same DuckDB with one thread is checked by `compare_bytes()`, not here: it holds only from the same chunk rows.
+SUM_COLUMNS = ("mean", "mean_wt", "sd", "weight_sum", "weight", "frac_area")
+SUM_REL = 1e-9
+
+
+def verdict(cmp: dict) -> dict:
+  """The criterion over `compare_rows()`: `{"pass": bool, "reasons": [why not], "sums_max_rel": float,
+  "duplicate_keys_ref": n}`. Passes when the schema is the same, the keys are the same and the engine has one row per
+  key, every column but `SUM_COLUMNS` is exact, and each `SUM_COLUMNS` column is within `SUM_REL` relative."""
+  why = list(cmp["schema_diff"])
+  if cmp["keys_only_ref"]:
+    why.append(f"{cmp['keys_only_ref']} key(s) only in the published file (first {cmp['missing_examples'][:1]})")
+  if cmp["keys_only_engine"]:
+    why.append(f"{cmp['keys_only_engine']} key(s) only in the engine's file (first {cmp['extra_examples'][:1]})")
+  if cmp["duplicate_keys_engine"]:
+    why.append(f"{cmp['duplicate_keys_engine']} key(s) more than once in the engine's file")
+  rel = 0.0
+  for c, v in cmp["columns"].items():
+    if v["exact"]:
+      continue
+    if c not in SUM_COLUMNS:
+      why.append(f"{c} not exact ({column_verdict(v)})")
+    elif "max_rel" not in v or math.isinf(v["max_abs"]):
+      why.append(f"{c}: a null or NaN against a value ({v['n_diff']} rows)")
+    elif v["max_rel"] > SUM_REL:
+      why.append(f"{c}: max rel {v['max_rel']:.2g} > {SUM_REL:g}")
+    else:
+      rel = max(rel, v["max_rel"])
+  return {"pass": not why, "reasons": why, "sums_max_rel": rel, "duplicate_keys_ref": cmp["duplicate_keys_ref"]}
 
 
 def rows_verdict(cmp: dict) -> str:
-  """`exact`; `float sums differ (max rel x)` when the keys and every integer, string and date column are equal and
-  the float columns that differ do so by at most `SUM_ORDER_REL` relative (the summation order of DuckDB's parallel
-  `sum`/`avg`/`stddev`, which differs from run to run on the runner too); else `differs`."""
+  """`exact`; `within the criterion (sums max rel x[; n duplicated key(s) published, written once])` when `verdict()`
+  passes; else `differs`."""
   if cmp["exact"]:
     return "exact"
-  if cmp["missing_in_engine"] or cmp["extra_in_engine"] or not cmp["schema_equal"]:
+  v = verdict(cmp)
+  if not v["pass"]:
     return "differs"
-  bad = [c for c in cmp["columns"].values() if not c["exact"]]
-  if all("max_rel" in c and c["max_rel"] <= SUM_ORDER_REL for c in bad):
-    return f"float sums differ (max rel {max(c['max_rel'] for c in bad):.1g})"
-  return "differs"
+  sums = f"sums max rel {v['sums_max_rel']:.1g}" if v["sums_max_rel"] else "sums exact"
+  dup = f"; {v['duplicate_keys_ref']} duplicated key(s) published, written once" if v["duplicate_keys_ref"] else ""
+  return f"within the criterion ({sums}{dup})"
+
+
+def compare_files(engine_path: str | Path, ref_path: str | Path) -> dict:
+  """Two stats files by the criterion: `rows` (`compare_rows()`), `verdict` (`verdict()`), `rows_verdict` and
+  `bytes` (`compare_bytes()`)."""
+  rows = compare_rows(pq.read_table(engine_path), pq.read_table(ref_path))
+  return {"engine": str(engine_path), "ref": str(ref_path), "rows_verdict": rows_verdict(rows),
+          "verdict": verdict(rows), "rows": rows,
+          "bytes": compare_bytes(engine_path, ref_path, rows_exact=rows["exact"])}
+
+
+def compare_text(res: dict) -> str:
+  """`compare_files()` as text: the rows, one line per column, the bytes, the verdict."""
+  r, v, b = res["rows"], res["verdict"], res["bytes"]
+  lines = [f"{res['engine']}  vs  {res['ref']}",
+           f"rows: {r['rows_engine']} vs {r['rows_ref']}, {r['paired']} paired, keys only published "
+           f"{r['keys_only_ref']}, only engine {r['keys_only_engine']}, duplicated keys published "
+           f"{r['duplicate_keys_ref']}, engine {r['duplicate_keys_engine']}"]
+  w = max([len(c) for c in r["columns"]] + [6])
+  lines += [f"  {c:<{w}}  {column_verdict(col)}" for c, col in r["columns"].items()]
+  lines.append(f"bytes: {'equal' if b['equal'] else 'differ'} ({b['bytes_engine']} vs {b['bytes_ref']})"
+               + ("" if b["equal"] else f": {'; '.join(b['reasons'])}"))
+  lines.append(f"verdict: {'PASS' if v['pass'] else 'FAIL'} -> {res['rows_verdict']}"
+               + ("" if v["pass"] else "\n  " + "\n  ".join(v["reasons"])))
+  return "\n".join(lines)
 
 
 def column_verdict(col: dict) -> str:
@@ -416,7 +473,7 @@ def run_parity(dataset_id: str, variable: str, place_id: str, out: str | Path, *
     "mask_key_equal": (x.mask_key == ref_dir.name) if ref_dir else None,
     "chunk_days": x.chunk_days, "slices": len(x.chunks_at or []), "fetched": len(x.fetched),
     "requests_fetched": len(x.fetched) * x.lobes, "copied_from_reference": len(copied), "fetch_mode": fetch_mode,
-    "rows_verdict": rows_verdict(rows), "rows": rows,
+    "rows_verdict": rows_verdict(rows), "verdict": verdict(rows), "rows": rows,
     "provenance": compare_provenance(prov, ref_prov),
     "bytes": compare_bytes(x.stats_path, ref["parquet"], rows_exact=rows["exact"]),
     "item": compare_item(ref_item, prov),

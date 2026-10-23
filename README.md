@@ -161,6 +161,8 @@ stats against the runner's.
 ```sh
 uv run om-extract parity --dataset dhw_5km --variable CRW_SST --place NMS:CINMS --out parity/cinms \
   --reference-chunks ~/actions-runner/erddap-places/_work/erddap-places/precompute-chunks --fetch all
+# two stats files by the criterion (exit 1 when it fails), e.g. a newly published file against the one it replaced
+uv run om-extract compare new/NMS:CINMS.parquet old/NMS:CINMS.parquet --json compare.json
 # every NMS: place, both variables: <out>/<variable>/parity_<place>.json and <out>/summary.md
 uv run om-extract parity --dataset dhw_5km --variable CRW_SST --variable CRW_BAA --place all --out parity/batch \
   --reference-chunks ~/actions-runner/erddap-places/_work/erddap-places/precompute-chunks --fetch last:3
@@ -180,9 +182,12 @@ It compares:
 
 - **rows**, matched by `date` (categorical: `date, class`), every column: `==` for `n`, the ids and the date; floats
   exact first, else the rows that differ, the largest absolute and relative difference and the largest distance in
-  ulps. Duplicated keys on either side are counted. The verdict is `exact`, `float sums differ (max rel x)` (keys,
-  integers, strings, `min`, `max`, `p10`, `p90` equal; only order-dependent sums differ, by at most 1e-12 relative)
-  or `differs`;
+  ulps. Duplicated keys on either side are counted. The verdict is the criterion of build week 1 (accepted by Ben
+  2026-10-23, `parity.verdict()`): every column `==` but the order-dependent sums (`mean`, `mean_wt`, `sd`,
+  `weight_sum`; categorical `weight`, `frac_area`), which may differ by `|a - b| / max(|a|, |b|) <= 1e-9`; the same
+  keys and one row per key in the engine's file (a key the published file has twice is counted, not failed). It reads
+  `exact`, `within the criterion (sums max rel x)` or `differs`; byte identity under the same DuckDB (pinned to the
+  runner's 1.5.5) with one thread is the bytes check below;
 - **provenance**, key by key (which differ, and for a list its first differing element); `generated` always differs;
 - **item** properties stated from the provenance (`start_datetime`, `table:row_count`, `erddap-places:*`);
 - **bytes** of the parquet, and why not (the writer's version, row groups, schema, codecs, values);

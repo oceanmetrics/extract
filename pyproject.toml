@@ -1,13 +1,16 @@
 [project]
 name = "om-extract"
-version = "0.6.1"
+version = "0.6.2"
 description = "Ocean Metrics extraction engine: one rule for summarising a layer by places into indicator values"
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Ocean Metrics LLC", email = "ben@oceanmetrics.io" }]
 requires-python = ">=3.12"
 dependencies = [
-  "duckdb>=1.4",
+  # the writer's DuckDB is the runner's (erddap-places, DuckDB node 1.5.5): the parity criterion (ledger 2026-10-23)
+  # asks for byte-identical stats files under the same DuckDB with one thread, and a parquet carries the writer's
+  # version, so the pin is exact
+  "duckdb==1.5.5",
   "pyarrow>=21",
   "numpy>=1.26",
   "shapely>=2.0",

@@ -81,6 +81,13 @@ def _parser() -> argparse.ArgumentParser:
                   help="published (default): the published file's window; live: window(ext, 'all')")
   pa.add_argument("--tries", type=int, default=3, help="tries in a row without a new chunk before a place is given "
                                                        "up, resting 10, 30, 60, 120 min between (default 3)")
+  cp = sub.add_parser("compare", help="compare two stats files by the parity criterion; exit 1 when it fails",
+                      description="Compare an engine's stats parquet with a published one row by row: every column but "
+                                  "the sums exact, the sums within 1e-9 relative, the same keys and one row per key in "
+                                  "the engine's file, and say whether the bytes are equal and why not.")
+  cp.add_argument("engine", help="the engine's stats parquet (a path)")
+  cp.add_argument("ref", help="the published stats parquet (a path)")
+  cp.add_argument("--json", help="also write the comparison to this JSON file")
   return p
 
 
@@ -166,6 +173,13 @@ def main(argv: list[str] | None = None) -> int:
     else:
       print(f"no values file: {res['rows']} rows")
     return 0
+  if args.command == "compare":
+    from om_extract.parity import compare_files, compare_text
+    res = compare_files(args.engine, args.ref)
+    print(compare_text(res))
+    if args.json:
+      Path(args.json).write_text(json.dumps(res, indent=2, default=str) + "\n")
+    return 0 if res["verdict"]["pass"] else 1
   if args.command == "parity":
     try:
       return _parity(args)

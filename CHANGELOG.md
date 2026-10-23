@@ -1,3 +1,16 @@
+# om-extract 0.6.2 (2026-10-23)
+
+- DuckDB pinned to exactly 1.5.5 (was `>=1.4`, resolved to 2.0.0), the runner's version: the parity criterion asks for
+  byte-identical stats files under the same DuckDB with one thread, and a parquet records its writer's version.
+- The parity criterion Ben accepted for build week 1 is the harness's verdict: `parity.verdict(cmp)` passes when the
+  schema and the keys are the same with one row per key in the engine's file, every column but the sums (`SUM_COLUMNS`:
+  `mean`, `mean_wt`, `sd`, `weight_sum`, categorical `weight`, `frac_area`) is `==`, and the sums are within `SUM_REL`
+  = 1e-9 relative; a key the published file carries twice (the duplicated-date bug) is counted, not failed.
+  `rows_verdict()` now says `exact`, `within the criterion (...)` or `differs` (was `float sums differ`, 1e-12), and
+  `parity.json` carries the `verdict`. `compare_rows()` adds `keys_only_ref` and `keys_only_engine` (distinct keys).
+- New `om-extract compare ENGINE.parquet REF.parquet [--json FILE]` (`parity.compare_files()`, `compare_text()`):
+  two stats files by the criterion and their bytes; exit 1 when the criterion fails.
+
 # om-extract 0.6.1 (2026-10-23)
 
 - New `om_extract.storage`, the python twin of `@oceanmetrics/catalog/storage` (platform catalog 0.5.1, build week 6

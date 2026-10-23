@@ -11,9 +11,11 @@ import pytest
 from fixtures_chunks import FakeErddap
 from fixtures_engine import collection, wkb
 from om_extract.engine import extract, provenance_text, stats_provenance
-from om_extract.parity import (ITEM_KEYS, column_verdict, compare_bytes, compare_chunks, compare_item,
-                               compare_provenance, compare_rows, reference_key_dir, rows_verdict, run_batch,
-                               run_parity, run_with_tries, seed_chunks, summary_markdown, ulps, verdict_table)
+from om_extract.cli import main
+from om_extract.parity import (ITEM_KEYS, SUM_REL, column_verdict, compare_bytes, compare_chunks, compare_files,
+                               compare_item, compare_provenance, compare_rows, reference_key_dir, rows_verdict,
+                               run_batch, run_parity, run_with_tries, seed_chunks, summary_markdown, ulps, verdict,
+                               verdict_table)
 
 D = [dt.date(2026, 1, d) for d in (1, 2, 3)]
 
@@ -36,7 +38,7 @@ def test_one_value_off_by_one_ulp_is_a_float_sum_difference():
   m = c["columns"]["mean"]
   assert not c["exact"] and m["n_diff"] == 1 and m["max_ulps"] == 1 and m["max_abs"] == off - 2.0
   assert m["first_diff"] == {"key": "2026-01-02", "engine": off, "ref": 2.0}
-  assert rows_verdict(c) == "float sums differ (max rel 2e-16)"
+  assert rows_verdict(c) == "within the criterion (sums max rel 2e-16)"
   assert column_verdict(m) == "max 4.4e-16 (1 ulp), 1 rows"
 
 
@@ -87,6 +89,90 @@ def test_a_type_difference_is_a_schema_difference():
 def test_nan_and_null_equal_themselves():
   c = compare_rows(table(mean=(float("nan"), None, 3.0)), table(mean=(float("nan"), None, 3.0)))
   assert c["exact"]
+
+
+# -- the criterion (ledger 2026-10-23): order-independent columns ==, sums within 1e-9 relative, one row per key ------
+def stats(mean=(10.0, 20.0, 30.0), mx=(11.0, 21.0, 31.0), dates=D, n=(6, 6, 6)):
+  return pa.table({"date": pa.array(dates, pa.date32()), "n": pa.array(n, pa.int64()),
+                   "mean": pa.array(mean, pa.float64()), "sd": pa.array([0.5] * len(dates), pa.float64()),
+                   "max": pa.array(mx, pa.float64()), "place_id": pa.array(["TEST:x"] * len(dates), pa.string())})
+
+
+def test_the_criterion_passes_the_observed_last_bit_sums():
+  # CINMS CRW_SST, 85 recomputed chunks: at most 2.8e-14 relative on the sums
+  c = compare_rows(stats(mean=(10.0, 20.0 * (1 + 2.8e-14), 30.0)), stats())
+  v = verdict(c)
+  assert v["pass"] and v["reasons"] == [] and 2e-14 < v["sums_max_rel"] < 3e-14
+  assert rows_verdict(c) == "within the criterion (sums max rel 3e-14)"
+
+
+def test_the_criterion_passes_at_1e9_and_fails_beyond():
+  assert verdict(compare_rows(stats(mean=(10.0, 20.0 * (1 + 0.9 * SUM_REL), 30.0)), stats()))["pass"]
+  v = verdict(compare_rows(stats(mean=(10.0, 20.0 * (1 + 2 * SUM_REL), 30.0)), stats()))
+  assert not v["pass"] and v["reasons"][0].startswith("mean: max rel 2e-09 > 1e-09")
+
+
+def test_an_order_independent_float_off_by_one_ulp_fails():
+  c = compare_rows(stats(mx=(11.0, math.nextafter(21.0, 22.0), 31.0)), stats())
+  v = verdict(c)
+  assert not v["pass"] and v["reasons"] == ["max not exact (max 3.6e-15 (1 ulp), 1 rows)"]
+  assert rows_verdict(c) == "differs"
+
+
+def test_an_integer_off_by_one_fails_the_criterion():
+  assert verdict(compare_rows(stats(n=(6, 7, 6)), stats()))["reasons"] == ["n not exact (1 rows differ)"]
+
+
+def test_a_sum_that_is_null_against_a_value_fails():
+  v = verdict(compare_rows(stats(mean=(10.0, None, 30.0)), stats()))
+  assert not v["pass"] and "mean: a null or NaN" in v["reasons"][0]
+
+
+def test_a_key_missing_from_the_engine_fails():
+  v = verdict(compare_rows(stats(dates=D[:2], mean=(10.0, 20.0), mx=(11.0, 21.0), n=(6, 6)), stats()))
+  assert not v["pass"] and v["reasons"] == ["1 key(s) only in the published file (first ['2026-01-03'])"]
+
+
+def test_a_duplicated_published_date_written_once_passes():
+  # the duplicated-date bug: the published file carries 2026-01-02 twice, its sums a few ulp apart; the engine once
+  ref = stats(dates=[D[0], D[1], D[1], D[2]], mean=(10.0, 20.0, math.nextafter(20.0, 21.0), 30.0),
+              mx=(11.0, 21.0, 21.0, 31.0), n=(6, 6, 6, 6))
+  c = compare_rows(stats(), ref)
+  v = verdict(c)
+  assert v["pass"] and v["duplicate_keys_ref"] == 1 and c["missing_in_engine"] == 1 and c["keys_only_ref"] == 0
+  assert rows_verdict(c) == "within the criterion (sums exact; 1 duplicated key(s) published, written once)"
+
+
+def test_a_duplicated_date_in_the_engine_fails():
+  eng = stats(dates=[D[0], D[1], D[1], D[2]], mean=(10.0, 20.0, 20.0, 30.0), mx=(11.0, 21.0, 21.0, 31.0),
+              n=(6, 6, 6, 6))
+  v = verdict(compare_rows(eng, stats()))
+  assert not v["pass"] and v["reasons"] == ["1 key(s) more than once in the engine's file"]
+
+
+def test_categorical_weights_are_sums_and_pct_cells_is_exact():
+  def cat(w, pct):
+    return pa.table({"date": pa.array([D[0], D[0]], pa.date32()), "class": pa.array([0, 1], pa.int64()),
+                     "weight": pa.array(w, pa.float64()), "frac_area": pa.array([0.25, 0.75], pa.float64()),
+                     "pct_cells": pa.array(pct, pa.float64())})
+  assert verdict(compare_rows(cat([1.0, 3.0 * (1 + 1e-12)], [25.0, 75.0]), cat([1.0, 3.0], [25.0, 75.0])))["pass"]
+  v = verdict(compare_rows(cat([1.0, 3.0], [25.0, math.nextafter(75.0, 76.0)]), cat([1.0, 3.0], [25.0, 75.0])))
+  assert not v["pass"] and v["reasons"][0].startswith("pct_cells not exact")
+
+
+def test_compare_on_files_exits_by_the_criterion(tmp_path, capsys):
+  pq.write_table(stats(), tmp_path / "ref.parquet")
+  pq.write_table(stats(mean=(10.0, 20.0 * (1 + 1e-13), 30.0)), tmp_path / "ok.parquet")
+  pq.write_table(stats(mx=(11.0, 21.5, 31.0)), tmp_path / "bad.parquet")
+  res = compare_files(tmp_path / "ok.parquet", tmp_path / "ref.parquet")
+  assert res["verdict"]["pass"] and not res["bytes"]["equal"]
+  assert compare_files(tmp_path / "ref.parquet", tmp_path / "ref.parquet")["bytes"]["equal"]
+  assert main(["compare", str(tmp_path / "ok.parquet"), str(tmp_path / "ref.parquet"),
+               "--json", str(tmp_path / "c.json")]) == 0
+  assert "verdict: PASS" in capsys.readouterr().out
+  assert json.loads((tmp_path / "c.json").read_text())["verdict"]["pass"] is True
+  assert main(["compare", str(tmp_path / "bad.parquet"), str(tmp_path / "ref.parquet")]) == 1
+  assert "verdict: FAIL -> differs\n  max not exact" in capsys.readouterr().out
 
 
 def test_ulps_counts_representable_doubles():
@@ -196,7 +282,7 @@ def test_the_engine_against_its_own_published_file_is_exact_to_the_byte(tmp_path
   gz = publish(tmp_path)
   res = run_parity("sst_deg1", "sst", PID, tmp_path / "out", base=gz, fetch=FakeErddap(), sleep=lambda s: None,
                    http=lambda u: pytest.fail(f"no http: {u}"))
-  assert res["rows_verdict"] == "exact" and res["rows"]["rows_engine"] == 100
+  assert res["rows_verdict"] == "exact" and res["rows"]["rows_engine"] == 100 and res["verdict"]["pass"]
   assert res["bytes"]["equal"]
   assert res["provenance"]["differ"] == {} and list(res["provenance"]["expected_diff"]) == ["generated"]
   assert res["item"]["differ"] == {}
