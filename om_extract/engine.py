@@ -174,7 +174,19 @@ def extract(collection: dict | str | Path, place_id: str, geometry_wkb: Any, var
   (`om_extract.chunks`, `extract_chunked()`): the live extent (raising when the server cannot say), the window
   `window(ext, 'all')` unless `t0`/`t1` pin it, axes from the server, the chunk size of the largest lobe, only the
   chunks the store lacks fetched, and the stats file written by DuckDB `COPY` to `stats_path`.
+
+  A STAC Item (a COG) or a reader object instead of a collection goes to `engine_reader.extract_reader()`, which
+  needs `t0` and `t1` and has no chunk store (`chunks=` raises ValueError).
   """
+  if not isinstance(collection, (str, Path)) and (not isinstance(collection, dict)
+                                                 or collection.get("type") == "Feature"):
+    if chunks is not None:
+      raise ValueError("the chunk store (chunks=) is the ERDDAP precompute: a COG or reader source has none")
+    if t0 is None or t1 is None:
+      raise ValueError("t0 and t1 are required for a COG or reader source")
+    from om_extract.engine_reader import extract_reader
+    return extract_reader(collection, place_id, geometry_wkb, var, t0, t1, fetch=fetch, coll=coll,
+                          categorical=categorical)
   if chunks is not None:
     return extract_chunked(collection, place_id, geometry_wkb, var, chunks, t0=t0, t1=t1, fetch=fetch, coll=coll,
                            categorical=categorical, stats_path=stats_path, existing=existing, sleep=sleep, log=log,
