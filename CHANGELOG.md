@@ -1,3 +1,25 @@
+# om-extract 0.6.0 (2026-10-23)
+
+- New Copernicus Marine reader `readers.copernicus.CopernicusReader(dataset_id, variable, *, info=None, subset=None,
+  version=None)` and `extract_place()`: the Toolbox subset of the surface layer per window (one per side of +-180), the
+  mean and sample SD of the cells whose centres fall inside the polygon (eco-indicators' method), month rows (`n = 1`)
+  and year rows (complete years, `n = 12`), `build_provenance()` with the Copernicus product as `provenance.dataset` and
+  the dataset id and version as the data source. Moved from oceanmetrics/indicators' `cmems_place` producer with its
+  rules and test fixture. New extra `cmems` (copernicusmarine, xarray, NetCDF backends); xarray joins the dev group.
+- `om-extract run --reader copernicus --dataset <id> --var <v> --place <id> [--coll] [--geometry] [--t0 --t1]
+  [--max-values]` writes the values file and `provenance.json`.
+- New `om_extract.stac`: `build_item()` (erddap-places' `buildItem()`: id, lobe-box geometry, bbox across +-180,
+  properties, status, assets with `file:size` and multihash `file:checksum`, links), `write_stats()` (the `stats/`
+  layout: parquet, provenance, `items/<id>.json`), `item_text()`, `union_bbox()`, `item_id()`, `stats_href()`. The
+  published NMS:CINMS x CRW_SST Item is rebuilt byte for byte from its files, the asset hrefs aside (`../`, erddap-places'
+  fix of 2026-10-22).
+- `om-extract run` gains `--chunks` (the chunked engine; the window is then optional), `--stats-dir` (the `stats/`
+  layout and its Item), `--base` and `--places-internal`; `--geometry` is optional (the place from the gazetteer, or
+  the private copy of a reference collection, `places.place_record()`). A place with no rows writes its stats but no
+  values file.
+- New `places.place_record(place_id, coll, base, internal)` (geometry, name, where it was read) and
+  `places.internal_dir()`.
+
 # om-extract 0.5.0 (2026-10-23)
 
 - New `om_extract.chunks`: erddap-places' chunk store (`<root>/<dataset>/<variable>/<place>/<mask_key>/<start>_<end>.parquet`,

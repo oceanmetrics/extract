@@ -111,3 +111,25 @@ def test_run_takes_a_geojson_geometry(tmp_path):
   assert main(args) == 0
   t = pq.read_table(d / "out" / "stats.parquet")
   assert t["n"].to_pylist() == [6, 5, 6]
+
+
+def test_run_passes_the_chunk_store_the_stats_dir_and_the_gazetteer_to_the_engine(tmp_path, monkeypatch, capsys):
+  """the request workflow's call: no --geometry, no window, --chunks and --stats-dir (the CLI holds no logic)"""
+  import om_extract.run as run_mod
+  seen = {}
+
+  def fake(collection, place, geometry, var, t0, t1, out, **kw):
+    seen.update(collection=collection, place=place, geometry=geometry, t0=t0, t1=t1, **kw)
+    return {"stats": "s.parquet", "provenance": "s.provenance.json", "item": "items/i.json", "values": "v.parquet",
+            "rows": 1, "indicator": "erddap:x:y:mean", "coll": "noaa_nerrs"}
+  monkeypatch.setattr(run_mod, "run", fake)
+  assert main(["run", "--collection", "c.json", "--place", "NERRS:WEL", "--coll", "noaa_nerrs", "--var", "CRW_SST",
+               "--out", str(tmp_path), "--chunks", "ch", "--stats-dir", "gz/stats", "--base", "gz"]) == 0
+  assert (seen["geometry"], seen["t0"], seen["t1"], seen["chunks"], seen["stats_dir"], seen["base"], seen["coll"]) == (
+    None, None, None, "ch", "gz/stats", "gz", "noaa_nerrs")
+  assert "wrote items/i.json" in capsys.readouterr().out
+
+
+def test_run_without_a_collection_or_a_reader_is_an_error(tmp_path, capsys):
+  assert main(["run", "--place", "NMS:A", "--var", "sst", "--out", str(tmp_path)]) == 1
+  assert "--collection is required" in capsys.readouterr().err

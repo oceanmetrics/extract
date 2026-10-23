@@ -2,6 +2,7 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from om_extract import __version__
 from om_extract.layers import format_layer_info, layer_info
@@ -30,17 +31,32 @@ def _parser() -> argparse.ArgumentParser:
   rn = sub.add_parser("run", help="summarise one variable of a layer over one place and window into a values file",
                       description="Extract one place x variable x window and write <out>/stats.parquet, "
                                   "<out>/provenance.json and <out>/values/indicator=<id>/coll=<slug>/data.parquet "
-                                  "(validated against the values contract).")
-  rn.add_argument("--collection", required=True, help="path or URL of the layer's collection.json")
+                                  "(validated against the values contract). With --chunks, the chunked engine over "
+                                  "the whole record; with --stats-dir, erddap-places' stats/ layout and its STAC Item. "
+                                  "--reader copernicus: one Copernicus Marine variable by the cell-centre mean.")
+  rn.add_argument("--reader", default="auto", choices=["auto", "copernicus"],
+                  help="auto (default): the reader the collection's profile names; copernicus: the Copernicus Marine "
+                       "Toolbox (--dataset, the maintainer's login in ~/.copernicusmarine)")
+  rn.add_argument("--collection", help="path or URL of the layer's collection.json (not with --reader copernicus)")
+  rn.add_argument("--dataset", help="--reader copernicus: the Copernicus Marine dataset id")
   rn.add_argument("--place", required=True, help="the gazetteer place id (NMS:CINMS)")
-  rn.add_argument("--geometry", required=True, help="the place geometry: a WKB file, or a GeoJSON file")
+  rn.add_argument("--geometry", help="the place geometry: a WKB file, or a GeoJSON file (default: read from the "
+                                     "gazetteer, --coll and --base)")
   rn.add_argument("--var", required=True, help="the variable (a cube:variables key)")
-  rn.add_argument("--t0", required=True, help="first day, yyyy-mm-dd")
-  rn.add_argument("--t1", required=True, help="last day, yyyy-mm-dd")
+  rn.add_argument("--t0", help="first day, yyyy-mm-dd (default with --chunks or copernicus: the whole record)")
+  rn.add_argument("--t1", help="last day, yyyy-mm-dd")
   rn.add_argument("--out", required=True, help="output directory")
   rn.add_argument("--stat", default="mean_wt",
                   help="the stats column that is the value: mean_wt (default), mean, sd, min, max, p10, p90")
   rn.add_argument("--coll", help="gazetteer collection of the place (default: NMS: is places, else the authority lowercased)")
+  rn.add_argument("--base", help="the gazetteer base URL or directory for the place geometry "
+                                 "(default https://storage.oceanmetrics.io/gazetteer)")
+  rn.add_argument("--places-internal", help="the private copies of the reference collections "
+                                            "(default $PLACES_INTERNAL, else ~/data/oceanmetrics/places-internal)")
+  rn.add_argument("--chunks", help="the chunk store: run the chunked engine (live extent, only missing chunks fetched)")
+  rn.add_argument("--stats-dir", help="write <stats-dir>/<dataset>/<variable>/<place>.parquet, .provenance.json and "
+                                      "<stats-dir>/items/<id>.json (erddap-places' stats/ layout and STAC Item)")
+  rn.add_argument("--max-values", type=int, help="--reader copernicus: refuse a job over this many grid values")
   rn.add_argument("--slab-dir", help="offline: serve each request URL from <slab-dir>/<sha1 of the URL>.parquet "
                                      "(hex sha1 of the URL's UTF-8 bytes, the URL as the provenance lists it)")
   pa = sub.add_parser("parity", help="run the engine live and compare it with erddap-places' published stats",
@@ -92,6 +108,30 @@ def _parity(args) -> int:
   return 0
 
 
+def _run_copernicus(args) -> dict:
+  """`om-extract run --reader copernicus`: the place geometry (the file, else the gazetteer), then
+  `readers.copernicus.run()`."""
+  from om_extract.engine import default_coll
+  from om_extract.readers import copernicus as cm
+  from om_extract.run import read_geometry
+  if not args.dataset:
+    raise ValueError("--reader copernicus needs --dataset (the Copernicus Marine dataset id)")
+  coll = args.coll or default_coll(args.place)
+  if args.geometry:
+    geom, polygon = read_geometry(args.geometry), {"kind": "file", "url": f"file:{Path(args.geometry).name}"}
+  else:
+    from om_extract.places import GAZETTEER_BASE, place_record
+    rec = place_record(args.place, coll, args.base or GAZETTEER_BASE, args.places_internal)
+    # a private copy is named by its collection, never by its path on this machine
+    url = rec["href"] if rec["copy"] == "published" else f"places-internal:{coll}/places.parquet"
+    geom, polygon = rec["wkb"], {"kind": rec["copy"], "url": url}
+  kw = {"max_values": args.max_values} if args.max_values else {}
+  res = cm.run(args.dataset, args.var, args.place, geom, args.out, coll=coll, polygon=polygon, start=args.t0,
+               end=args.t1, **kw)
+  print(f"{args.place} ({coll}) {res['indicator']}: windows {res['windows']}, {res['cells']} cell centres inside")
+  return res
+
+
 def main(argv: list[str] | None = None) -> int:
   """Run the command line; return the exit code (0 ok, 1 on any error)."""
   args = _parser().parse_args(argv)
@@ -100,21 +140,31 @@ def main(argv: list[str] | None = None) -> int:
     return 0
   if args.command == "run":
     from om_extract.contract import ContractError
-    from om_extract.run import run
     try:
-      res = run(args.collection, args.place, args.geometry, args.var, args.t0, args.t1, args.out, stat=args.stat,
-                coll=args.coll, slab_dir=args.slab_dir)
+      if args.reader == "copernicus":
+        res = _run_copernicus(args)
+      else:
+        if not args.collection:
+          raise ValueError("--collection is required (or --reader copernicus with --dataset)")
+        from om_extract.run import run
+        res = run(args.collection, args.place, args.geometry, args.var, args.t0, args.t1, args.out, stat=args.stat,
+                  coll=args.coll, slab_dir=args.slab_dir, chunks=args.chunks, stats_dir=args.stats_dir,
+                  base=args.base, internal=args.places_internal, log=print if args.chunks else None)
     except ContractError as e:
       for line in e.errors:
         print(f"error: {line}", file=sys.stderr)
       return 1
-    except (InvalidCollection, UnknownProfile, ErddapError, OSError, ValueError) as e:
+    except (InvalidCollection, UnknownProfile, ErddapError, OSError, ValueError, LookupError, RuntimeError) as e:
       for line in str(e).splitlines():
         print(f"error: {line}", file=sys.stderr)
       return 1
-    print(f"wrote {res['stats']}")
-    print(f"wrote {res['provenance']}")
-    print(f"wrote {res['values']} ({res['rows']} rows, {res['indicator']}, coll {res['coll']})")
+    for k in ("stats", "provenance", "item"):
+      if res.get(k):
+        print(f"wrote {res[k]}")
+    if res.get("values"):
+      print(f"wrote {res['values']} ({res['rows']} rows, {res['indicator']}, coll {res['coll']})")
+    else:
+      print(f"no values file: {res['rows']} rows")
     return 0
   if args.command == "parity":
     try:

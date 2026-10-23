@@ -1,6 +1,6 @@
 [project]
 name = "om-extract"
-version = "0.5.0"
+version = "0.6.0"
 description = "Ocean Metrics extraction engine: one rule for summarising a layer by places into indicator values"
 readme = "README.md"
 license = "MIT"
@@ -17,11 +17,17 @@ dependencies = [
   "rasterio>=1.4",
 ]
 
+[project.optional-dependencies]
+# cmems: the Copernicus Marine reader (om_extract/readers/copernicus.py): the Toolbox and xarray with the NetCDF backends
+# it needs to read the Toolbox's files (h5netcdf, h5py, netCDF4); imported inside the functions that use them
+cmems = ["copernicusmarine>=2.0", "xarray>=2024.1", "h5netcdf>=1.3", "h5py>=3.10", "netCDF4>=1.7"]
+
 [project.scripts]
 om-extract = "om_extract.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+# xarray: the Copernicus reader's tests stand a small DataArray in for the Toolbox subset (no login, no Toolbox)
+dev = ["pytest>=8", "xarray>=2024.1"]
 
 [build-system]
 requires = ["hatchling"]

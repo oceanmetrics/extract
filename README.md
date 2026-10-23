@@ -9,7 +9,7 @@ one weighting rule, on the Mac mini runner and with the same SQL in the browser.
 | When | What |
 |---|---|
 | Day 4 (2026-10-25) | Reader interface `extent()`, `axes(bbox, depth)`, `slab(bbox, t0, t1, var)`, `slice(bbox, t, var)`; `grid_mask` ported from erddap-places with its fixture bit for bit; the CLI; output through the values contract |
-| Build week 1 (2026-10-30 to 11-05) | ERDDAP, COG and H3 readers; the 18 sanctuaries recomputed; the Copernicus Marine producer as a reader |
+| Build week 1 (2026-10-30 to 11-05) | ERDDAP, COG and H3 readers; the 18 sanctuaries recomputed; the Copernicus Marine producer as a reader (done 2026-10-23, 0.6.0, with the stats Item writer and `om-extract run --chunks --stats-dir`) |
 
 ## The rule
 
@@ -115,6 +115,31 @@ It writes:
 - `--slab-dir` runs offline: each request URL is read from `<slab-dir>/<sha1 of the URL>.parquet` (the hex sha1 of the
   URL's UTF-8 bytes, `om_extract.run.slab_file(url)`). A URL without a file is an error that names it; the info table
   is one such URL, so the time extent is the catalog's.
+
+**The request workflow's call** (oceanmetrics/indicators `requests.yml`): the chunked engine over the whole record,
+the place read from the gazetteer, and erddap-places' `stats/` layout with its STAC Item:
+
+```sh
+uv run om-extract run --collection https://storage.oceanmetrics.io/gazetteer/erddap/dhw_5km/collection.json \
+  --place NERRS:WEL --coll noaa_nerrs --var CRW_SST --chunks ~/.cache/oceanmetrics/chunks \
+  --stats-dir out/gazetteer/stats --out out/run
+```
+
+- `--chunks DIR` runs `extract(..., chunks=DIR)` (see "Parity"): the live extent, `window(ext, 'all')` unless
+  `--t0`/`--t1` pin it, only the chunks the store lacks fetched. Without it `--t0` and `--t1` are required.
+- No `--geometry`: the place is one row of `<base>/<coll>/places.parquet` (`--base`, default the published
+  gazetteer), or of the private full-resolution copy `<places-internal>/<coll>/places.parquet` when this machine holds
+  one (a reference collection, `mr_*`; `--places-internal`, default `$PLACES_INTERNAL`, else
+  `~/data/oceanmetrics/places-internal`), with its `name` for the Item (`places.place_record()`).
+- `--stats-dir DIR` writes, in upload order, `DIR/<dataset>/<variable>/<place>.parquet` (the chunked writer's file),
+  `DIR/<dataset>/<variable>/<place>.provenance.json` (`provenance_text()`) and `DIR/items/<dataset>_<variable>_<place
+  with - for :>.json`, the Item (`stac.build_item()`, erddap-places' `buildItem()`: lobe-box geometry, the bbox across
+  +-180 for a split place, `erddap-places:*` properties, `status` complete or partial, the assets' `file:size` and
+  multihash `file:checksum`, the dataset's `via` link). Built from the published files of NMS:CINMS x CRW_SST, the
+  Item is the published one byte for byte except its asset hrefs (`../` here; erddap-places fixed `../../` on
+  2026-10-22 and the published Item predates it), a `live` test. Nothing here uploads: the workflow does, and until the parity criterion is restated (the
+  engine's sums differ from the published ones in the last bits, see "Parity"; ledger 2026-10-23) it does not: its
+  `OM_STATS_PUBLISH` defaults to a dry run that lists the files and attaches them to the run as an artifact.
 
 In Python the steps are three calls (`om_extract/engine.py`, `om_extract/values.py`):
 
@@ -385,6 +410,40 @@ mem = load_membership("places", "NMS:CINMS", 5)
 x = extract_h3(obis_h3_collection, "NMS:CINMS", mem, "shannon", 5)        # root from the collection's self link
 contract.write_values(values_rows(x), "out", h3_provenance_for(x, om_extract.__version__))
 ```
+
+## Readers: Copernicus Marine
+
+`om_extract/readers/copernicus.py` is the Copernicus Marine place producer of oceanmetrics/indicators
+(`om_indicators/producers/cmems_place.py`, which is now a thin call into it) as a reader. `CopernicusReader(dataset_id,
+variable, *, info=None, subset=None, version=None)` puts the Toolbox behind the reader interface (`extent`, `axes`:
+the catalogue's lattice, `slab`, `slice`, `source_block`: `copernicus:*`); `info` is the catalogue record
+(`info_from_catalogue()`, default the live catalogue, which needs no login) and `subset(dataset, var, window, start,
+end)` the data (default `toolbox_subset()`, with the maintainer's login in `~/.copernicusmarine`; nothing here reads
+it). `extract_place(reader, place_id, geom, coll)` is the one call: windows, size check, subsets, mean, rows. The rules:
+
+- **Windows**: the polygon's bbox grown by one grid cell, clamped to the dataset's range; a place across the
+  antimeridian (split at +-180) gets one window per side.
+- **Subset**: the surface layer only (depth 0 to 0.51 m), the shallowest level kept, the whole record or `--t0`/`--t1`.
+- **Mean**: per time step the mean of the cells whose centres fall inside the polygon (boundary included), NaN skipped,
+  and the sample SD of those cells; a cell in two windows counts once. This is eco-indicators' `terra::extract(...,
+  fun = mean)`, not the grid rule's partial-area weights: the Copernicus record keeps eco-indicators' method.
+- **Rows**: a month row is the monthly mean, `n = 1`, the cell SD in `sd`; a year row the mean of its 12 monthly means,
+  `n = 12`, only for a complete year. Indicator `cmems:<dataset id>:<variable>:mean`.
+- **Provenance**: `dataset` the Copernicus Marine product (id, title, DOI, the "E.U. Copernicus Marine Service
+  Information; <title>; <doi>" citation); `sources[]` the subset (`copernicusmarine:<dataset id>`, its version and the
+  Toolbox version in the title), the product page and the polygon's source.
+
+```sh
+uv sync --extra cmems          # copernicusmarine, xarray and the NetCDF backends (h5netcdf, h5py, netCDF4)
+uv run om-extract run --reader copernicus --dataset cmems_mod_glo_bgc_my_0.25deg_P1M-m --var no3 \
+  --place MRGID:5670 --coll mr_eez --out out/ [--geometry place.geojson] [--t0 1993-01-01 --t1 2024-12-01] [--max-values N]
+```
+
+It writes `<out>/values/indicator=cmems:<dataset>:<var>:mean/coll=<slug>/data.parquet` through the contract writer and
+`<out>/provenance.json` (windows, grid, cells, depth used, Toolbox version). The tests stand a small xarray DataArray in
+for the subset (`tests/fixtures_copernicus.py`, ported from indicators' fixture with the rules), so none needs the
+Toolbox or a login; indicators keeps a test that the producer's output folder is byte for byte what it wrote before
+the move.
 
 ## Notebooks
 

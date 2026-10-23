@@ -75,3 +75,33 @@ def place_collection(place_id: str, base: str | Path = GAZETTEER_BASE) -> str:
   if row is None:
     raise PlaceNotFound(f"no place {place_id} in the places index")
   return str(row[0])
+
+
+def internal_dir() -> Path:
+  """The build machine's private copies of the reference collections (`$PLACES_INTERNAL`, else
+  `~/data/oceanmetrics/places-internal`): `<slug>/places.parquet` at full resolution, never published, read in place
+  (as erddap-places' `internalParquet()` and the Copernicus Marine place producer read them)."""
+  import os
+  return Path(os.environ.get("PLACES_INTERNAL") or Path.home() / "data" / "oceanmetrics" / "places-internal")
+
+
+def place_record(place_id: str, coll: str = "places", base: str | Path = GAZETTEER_BASE,
+                 internal: str | Path | None = None) -> dict:
+  """A place's geometry, name and where they were read: the private full-resolution copy
+  `<internal>/<coll>/places.parquet` when this machine holds one (a reference collection, `mr_*`), else the published
+  `<base>/<coll>/places.parquet`. Returns `{"wkb", "name", "coll", "href", "copy"}` (`copy` is `internal` or
+  `published`; the name is the place id when the file has no `name`). Raises `PlaceNotFound`."""
+  own = Path(internal if internal is not None else internal_dir()) / coll / "places.parquet"
+  href, copy = (str(own), "internal") if own.is_file() else (places_href(coll, base), "published")
+  con = _connect()
+  try:
+    cols = [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM read_parquet('{href}')").fetchall()]
+    name = "name" if "name" in cols else "place_id"
+    row = con.execute(f"SELECT geometry, {name} FROM read_parquet('{href}') WHERE place_id = ? LIMIT 1",
+                      [place_id]).fetchone()
+  finally:
+    con.close()
+  if row is None:
+    raise PlaceNotFound(f"no place {place_id} in the {coll} collection ({href})")
+  return {"wkb": bytes(row[0]), "name": str(row[1] if row[1] is not None else place_id), "coll": coll, "href": href,
+          "copy": copy}
