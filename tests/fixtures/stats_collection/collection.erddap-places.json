@@ -1,0 +1,2835 @@
+{
+  "type": "Collection",
+  "id": "stats",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
+  ],
+  "title": "Precomputed place statistics",
+  "description": "Precomputed statistics of ERDDAP grid variables over the gazetteer places: one Parquet file per (dataset, variable, place), covering the dataset's full record. A long backfill fills in over several daily runs, so each item link and Item says how far it has got in erddap-places:status (complete: from the first time step; partial: a later start, still being backfilled), and erddap-places:pending lists the targets with no file yet. Each file is produced by exactly the code the browser app runs live — the place polygon masks the dataset's own grid (cell centre inside, partial-area weight on the boundary) and sql/stats_daily.sql or sql/stats_categorical.sql aggregates per day — so a precomputed row and a live in-browser row agree. Use these when you want the answer now; run the live query when you want today. An Item's gazetteer:collection names the gazetteer collection its place came from (places for the 18 sanctuaries listed here); places of other collections are precomputed on request and have an Item and a file, but no entry in this collection.",
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "statistics",
+    "time series",
+    "marine protected areas",
+    "ERDDAP",
+    "griddap",
+    "zonal statistics"
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [
+        [
+          177.84422,
+          -15.3861496,
+          -70.0350637,
+          48.5058899
+        ]
+      ]
+    },
+    "temporal": {
+      "interval": [
+        [
+          "1985-04-01T12:00:00Z",
+          "2026-10-22T12:00:00Z"
+        ]
+      ]
+    }
+  },
+  "providers": [
+    {
+      "name": "NOAA Atlantic Oceanographic and Meteorological Laboratory (AOML)",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://www.aoml.noaa.gov"
+    },
+    {
+      "name": "Copernicus Marine Service (CMEMS) / Mercator Ocean International",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://marine.copernicus.eu"
+    },
+    {
+      "name": "NASA Global Precipitation Measurement (GPM) mission",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://gpm.nasa.gov/data/imerg"
+    },
+    {
+      "name": "Oregon State University Ocean Productivity (VGPM, from NASA MODIS-Aqua)",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "http://sites.science.oregonstate.edu/ocean.productivity/"
+    },
+    {
+      "name": "NOAA Coral Reef Watch (CRW)",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://coralreefwatch.noaa.gov"
+    },
+    {
+      "name": "Ocean Metrics LLC",
+      "roles": [
+        "processor",
+        "host"
+      ],
+      "url": "https://oceanmetrics.io"
+    }
+  ],
+  "summaries": {
+    "erddap-places:dataset_id": [
+      "noaa_aoml_seascapes_8day",
+      "cmems_salinity",
+      "cmems_biogeochem_nutrients",
+      "cmems_biogeochem_phyto",
+      "cmems_biogeochem_pp",
+      "cmems_biogeochem_carbon",
+      "cmems_biogeochem_co2",
+      "cmems_biogeochem_zoo",
+      "cmems_altimetry",
+      "IMERG_monthly_global_precip",
+      "moda_npp_mo_glob",
+      "dhw_5km"
+    ],
+    "erddap-places:variable": [
+      "CLASS",
+      "so",
+      "fe",
+      "no3",
+      "po4",
+      "si",
+      "chl",
+      "phyc",
+      "nppv",
+      "o2",
+      "dissic",
+      "ph",
+      "spco2",
+      "zooc",
+      "mlotst",
+      "tob",
+      "precipitation",
+      "npp",
+      "CRW_SST",
+      "CRW_BAA"
+    ],
+    "erddap-places:place_id": [
+      "NMS:CBNMS",
+      "NMS:CHNMS",
+      "NMS:CINMS",
+      "NMS:FGBNMS",
+      "NMS:FKNMS",
+      "NMS:GFNMS",
+      "NMS:GRNMS",
+      "NMS:HIHWNMS",
+      "NMS:LONMS",
+      "NMS:MBNMS",
+      "NMS:MBPR",
+      "NMS:MNMS",
+      "NMS:NMSAS",
+      "NMS:OCNMS",
+      "NMS:PMNM",
+      "NMS:SBNMS",
+      "NMS:TBNMS",
+      "NMS:WSCNMS"
+    ],
+    "erddap-places:status": [
+      "complete"
+    ]
+  },
+  "erddap-places:item_counts": {
+    "complete": 346,
+    "partial": 0,
+    "pending": 0
+  },
+  "erddap-places:pending": [],
+  "table:columns": [
+    {
+      "name": "date",
+      "type": "date",
+      "description": "UTC day of the time step"
+    },
+    {
+      "name": "n",
+      "type": "int64",
+      "description": "grid cells with a non-null value on that day"
+    },
+    {
+      "name": "mean",
+      "type": "double",
+      "description": "unweighted mean over the masked cells"
+    },
+    {
+      "name": "mean_wt",
+      "type": "double",
+      "description": "area-weighted mean (partial boundary cells count for their overlap)"
+    },
+    {
+      "name": "sd",
+      "type": "double",
+      "description": "sample standard deviation"
+    },
+    {
+      "name": "min",
+      "type": "double",
+      "description": "minimum"
+    },
+    {
+      "name": "max",
+      "type": "double",
+      "description": "maximum"
+    },
+    {
+      "name": "p10",
+      "type": "double",
+      "description": "10th percentile (continuous)"
+    },
+    {
+      "name": "p90",
+      "type": "double",
+      "description": "90th percentile (continuous)"
+    },
+    {
+      "name": "weight_sum",
+      "type": "double",
+      "description": "sum of the cell area weights contributing to the day"
+    },
+    {
+      "name": "place_id",
+      "type": "string",
+      "description": "gazetteer place id, e.g. NMS:HIHWNMS"
+    },
+    {
+      "name": "dataset_id",
+      "type": "string",
+      "description": "ERDDAP datasetID, e.g. dhw_5km"
+    },
+    {
+      "name": "variable",
+      "type": "string",
+      "description": "ERDDAP variable, e.g. CRW_SST"
+    }
+  ],
+  "assets": {
+    "thumbnail": {
+      "href": "./stats.thumb.png",
+      "type": "image/png",
+      "title": "the precomputed places, equirectangular",
+      "roles": [
+        "thumbnail"
+      ],
+      "file:size": 1935,
+      "file:checksum": "1220a04fe3c301e31415496052216e43df8fec1e62213b28d1ddc5cfe3b59ab51804"
+    }
+  },
+  "updated": "2026-10-23T22:05:16Z",
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "Ocean Metrics gazetteer"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Agent/LLM usage guide"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Human-readable documentation"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/noaa_aoml_seascapes_8day/collection.json",
+      "type": "application/json",
+      "title": "source dataset: noaa_aoml_seascapes_8day"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/cmems_salinity/collection.json",
+      "type": "application/json",
+      "title": "source dataset: cmems_salinity"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/cmems_biogeochem_nutrients/collection.json",
+      "type": "application/json",
+      "title": "source dataset: cmems_biogeochem_nutrients"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/cmems_biogeochem_phyto/collection.json",
+      "type": "application/json",
+      "title": "source dataset: cmems_biogeochem_phyto"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/cmems_biogeochem_pp/collection.json",
+      "type": "application/json",
+      "title": "source dataset: cmems_biogeochem_pp"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/cmems_biogeochem_carbon/collection.json",
+      "type": "application/json",
+      "title": "source dataset: cmems_biogeochem_carbon"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/cmems_biogeochem_co2/collection.json",
+      "type": "application/json",
+      "title": "source dataset: cmems_biogeochem_co2"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/cmems_biogeochem_zoo/collection.json",
+      "type": "application/json",
+      "title": "source dataset: cmems_biogeochem_zoo"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/cmems_altimetry/collection.json",
+      "type": "application/json",
+      "title": "source dataset: cmems_altimetry"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/IMERG_monthly_global_precip/collection.json",
+      "type": "application/json",
+      "title": "source dataset: IMERG_monthly_global_precip"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/moda_npp_mo_glob/collection.json",
+      "type": "application/json",
+      "title": "source dataset: moda_npp_mo_glob"
+    },
+    {
+      "rel": "related",
+      "href": "../erddap/dhw_5km/collection.json",
+      "type": "application/json",
+      "title": "source dataset: dhw_5km"
+    },
+    {
+      "rel": "related",
+      "href": "../places/collection.json",
+      "type": "application/json",
+      "title": "National Marine Sanctuaries (NMS codes)"
+    },
+    {
+      "href": "https://cwcgom.aoml.noaa.gov/erddap/info/noaa_aoml_seascapes_8day/index.html",
+      "title": "8_Day Global Seascapes (NOAA AOML)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/cmems_salinity/index.html",
+      "title": "cmems_salinity (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/cmems_biogeochem_nutrients/index.html",
+      "title": "cmems_biogeochem_nutrients (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/cmems_biogeochem_phyto/index.html",
+      "title": "cmems_biogeochem_phyto (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/cmems_biogeochem_pp/index.html",
+      "title": "cmems_biogeochem_pp (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/cmems_biogeochem_carbon/index.html",
+      "title": "cmems_biogeochem_carbon (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/cmems_biogeochem_co2/index.html",
+      "title": "cmems_biogeochem_co2 (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/cmems_biogeochem_zoo/index.html",
+      "title": "cmems_biogeochem_zoo (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/cmems_altimetry/index.html",
+      "title": "cmems_altimetry (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/IMERG_monthly_global_precip/index.html",
+      "title": "IMERG_monthly_global_precip (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://erddap.marine.usf.edu/erddap/info/moda_npp_mo_glob/index.html",
+      "title": "moda_npp_mo_glob (source, USF IMaRS ERDDAP)",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "href": "https://pae-paha.pacioos.hawaii.edu/erddap/info/dhw_5km/index.html",
+      "title": "NOAA Coral Reef Watch — Daily Global 5km SST + DHW",
+      "rel": "via",
+      "type": "text/html"
+    },
+    {
+      "rel": "item",
+      "href": "./items/noaa_aoml_seascapes_8day_CLASS_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — CLASS",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/noaa_aoml_seascapes_8day_CLASS_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — CLASS",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/noaa_aoml_seascapes_8day_CLASS_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — CLASS",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/noaa_aoml_seascapes_8day_CLASS_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — CLASS",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_salinity_so_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — so",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_fe_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — fe",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_no3_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — no3",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_po4_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — po4",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_nutrients_si_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — si",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_chl_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — chl",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_phyto_phyc_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — phyc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_nppv_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — nppv",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_pp_o2_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — o2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_dissic_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — dissic",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_carbon_ph_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — ph",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_co2_spco2_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — spco2",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_biogeochem_zoo_zooc_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — zooc",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_mlotst_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — mlotst",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/cmems_altimetry_tob_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — tob",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/IMERG_monthly_global_precip_precipitation_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — precipitation",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/moda_npp_mo_glob_npp_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — npp",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-GRNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GRNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-GFNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:GFNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-HIHWNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:HIHWNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-LONMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:LONMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-MBPR.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBPR — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-MNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-MBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:MBNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-OCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:OCNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-PMNM.json",
+      "type": "application/geo+json",
+      "title": "NMS:PMNM — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-SBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:SBNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-TBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:TBNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_BAA_NMS-WSCNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:WSCNMS — CRW_BAA",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-NMSAS.json",
+      "type": "application/geo+json",
+      "title": "NMS:NMSAS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-CINMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CINMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-CHNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CHNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-CBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:CBNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-FKNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FKNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    },
+    {
+      "rel": "item",
+      "href": "./items/dhw_5km_CRW_SST_NMS-FGBNMS.json",
+      "type": "application/geo+json",
+      "title": "NMS:FGBNMS — CRW_SST",
+      "erddap-places:status": "complete"
+    }
+  ]
+}

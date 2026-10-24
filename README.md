@@ -141,6 +141,22 @@ uv run om-extract run --collection https://storage.oceanmetrics.io/gazetteer/erd
   engine's sums differ from the published ones in the last bits, see "Parity"; ledger 2026-10-23) it does not: its
   `OM_STATS_PUBLISH` defaults to a dry run that lists the files and attaches them to the run as an artifact.
 
+**The stats collection** (`gazetteer/stats/collection.json`, which links every Item; erddap-places' `stac.ts` wrote it
+until its precompute went off on 2026-10-24): indicators' daily job rebuilds it after the Items it published,
+
+```sh
+uv run om-extract stats-collection --units scripts/parity_units.tsv --items out/daily/<unit>/unit/gazetteer/stats/items \
+  --out out/collection
+```
+
+`om_extract.stats_collection.rebuild()` (erddap-places' `buildCollection()`, `writeThumbnail()` and `listedItems()`):
+the Items of the units of the `places` collection, this run's (`--items`) or else the storage host's; a unit without an
+Item is `pending`; the previous collection's link order is kept, a new Item goes at the end by id; the extent is the
+union of the Items' bboxes (across +-180) and their earliest start to latest end; the status summary and the item
+counts by `itemStatus()`; providers and `via` pages from the datasets' collections; the thumbnail from the Items' lobe
+boxes. From the published Items it is the last collection erddap-places wrote byte for byte but `updated` (a test,
+fixture `tests/fixtures/stats_collection/`). It refuses (exit 1, nothing written) on any host answer but 200 or 404.
+
 In Python the steps are three calls (`om_extract/engine.py`, `om_extract/values.py`):
 
 ```python

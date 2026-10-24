@@ -94,6 +94,17 @@ def _parser() -> argparse.ArgumentParser:
   cp.add_argument("--first-publish", action="store_true",
                   help="there is no published file (no REF): the first publish, which passes")
   cp.add_argument("--json", help="also write the comparison to this JSON file")
+  sc = sub.add_parser("stats-collection", help="rebuild gazetteer/stats/collection.json and its thumbnail from the "
+                                                "published Items of a units list",
+                      description="Write <out>/stats.thumb.png and <out>/collection.json (erddap-places' stac.ts "
+                                  "buildCollection(), om_extract.stats_collection): the Items of the units of the places "
+                                  "collection, read from --items (this run's) or the storage host; a unit with no Item "
+                                  "is pending; the previous collection's link order is kept. Exit 1 on any read error.")
+  sc.add_argument("--units", required=True, help="the units TSV: place, coll, dataset, variable[, cadence]")
+  sc.add_argument("--out", required=True, help="output directory")
+  sc.add_argument("--items", action="append", default=[], help="an Item file or a folder of Items published in this "
+                                                                "run, read instead of the host's (repeatable)")
+  sc.add_argument("--host", help="the storage host (default: OM_STORAGE, else https://storage.oceanmetrics.io)")
   return p
 
 
@@ -189,6 +200,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
       Path(args.json).write_text(json.dumps(res, indent=2, default=str) + "\n")
     return 0 if res["verdict"]["pass"] else 1
+  if args.command == "stats-collection":
+    from om_extract import stats_collection as stc
+    from om_extract.storage import storage_host_from_env
+    try:
+      res = stc.rebuild(stc.read_units(args.units), args.out, host=args.host or storage_host_from_env(),
+                        local_items=args.items, fetch=stc.http_fetch)
+    except (OSError, ValueError, RuntimeError, KeyError) as e:
+      for line in str(e).splitlines():
+        print(f"error: {line}", file=sys.stderr)
+      return 1
+    n = res["counts"]
+    print(f"{res['items']} items ({n['complete']} complete, {n['partial']} partial), {res['pending']} pending, "
+          f"{res['local']} from this run")
+    print(f"wrote {res['thumbnail']}")
+    print(f"wrote {res['collection']}")
+    return 0
   if args.command == "parity":
     try:
       return _parity(args)

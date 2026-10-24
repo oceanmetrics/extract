@@ -1,3 +1,15 @@
+# om-extract 0.6.5 (2026-10-24)
+
+- `om_extract.stats_collection`: the stats STAC Collection `gazetteer/stats/collection.json` and `stats.thumb.png`,
+  erddap-places' `buildCollection()`, `writeThumbnail()` and `listedItems()` (`precompute/src/stac.ts`, ec67849) in
+  Python, rebuilt from the published Items (`rebuild()`, `build_collection()`, `listed_refs()`, `order_refs()`,
+  `dataset_providers()`, `dataset_via()`, `write_thumbnail()`, `read_units()`). Why: since 2026-10-24 the engine
+  publishes every Item and erddap-places' precompute is off, so its collection froze (ledger week 6).
+- `om-extract stats-collection --units TSV --out DIR [--items DIR ...] [--host URL]`: what indicators' daily job runs
+  after the Items; exit 1 and nothing written on a read error.
+- Tests: one per rule on synthetic Items, and the rebuild from the 346 published Items reproduces erddap-places' last
+  collection.json byte for byte but `updated`, and its thumbnail.
+
 # om-extract 0.6.4 (2026-10-24)
 
 - The publish gate: `parity.gate(engine, ref, allow_newer=False)` and `split_newer()`. With `allow_newer` the engine's
