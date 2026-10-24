@@ -37,10 +37,18 @@ class FakeErddap:
   """`fetch(url) -> bytes` for the synthetic grid; `slabs` lists each slab request as `t0..t1` (days) per lobe."""
 
   def __init__(self, start: str = "2026-01-01T12:00:00Z", end: str = "2026-04-10T12:00:00Z", value=doy,
-               info_error: Exception | None = None, missing: tuple[str, ...] = (), request_value=None):
+               info_error: Exception | None = None, missing: tuple[str, ...] = (), request_value=None,
+               steps: list[str] | None = None, spacing: str = "1 day"):
     """`missing`: days the time axis lacks (a constraint on one snaps to the next day, as ERDDAP did for dhw_5km's
     2024-07-25); `request_value(t0_day, day, lat, lon)` replaces `value` when a cell's value should depend on the
-    request (two requests of one day giving rows that differ in the last bits, as the runner's parallel sums do)."""
+    request (two requests of one day giving rows that differ in the last bits, as the runner's parallel sums do).
+    `steps`: an explicit time axis (ISO instants, oldest first; `start`/`end` are then its ends), a coarser grid than
+    daily such as a monthly product at 00:00Z (IMERG) or an 8-day one; a constraint snaps to the closest step, as
+    ERDDAP does, so a chunk can get a step that lies before its own first day. `spacing` is the info table's
+    averageSpacing."""
+    if steps:
+      start, end = steps[0], steps[-1]
+    self.steps, self.spacing = steps, spacing
     self.start, self.end, self.value, self.info_error = start, end, value, info_error
     self.missing, self.request_value = set(missing), request_value
     self.log: list[str] = []
@@ -51,7 +59,7 @@ class FakeErddap:
     if url == INFO_URL:
       if self.info_error is not None:
         raise self.info_error
-      return json.dumps(info_table(self.start, self.end)).encode()
+      return json.dumps(info_table(self.start, self.end, spacing=self.spacing)).encode()
     m = _AXIS.search(url)
     if m:
       axis, a, b = m.group(1), float(m.group(2)), float(m.group(3))
@@ -63,6 +71,9 @@ class FakeErddap:
     m = _SLAB.search(url)
     if m:
       var, t0, t1, la1, la0, lo0, lo1 = m.groups()
+      if self.steps:
+        self.slabs.append(f"{t0[:10]}..{t1[:10]}")
+        return self.slab_steps(var, self.closest(t0), self.closest(t1), float(la1), float(la0), float(lo0), float(lo1))
       d0, d1 = self.snap(t0[:10]), self.snap(t1[:10])
       self.slabs.append(f"{t0[:10]}..{t1[:10]}")
       return self.slab(var, d0, d1, float(la1), float(la0), float(lo0), float(lo1), t0[:10])
@@ -74,6 +85,29 @@ class FakeErddap:
     while x.isoformat() in self.missing:
       x += timedelta(days=1)
     return x.isoformat()
+
+  def closest(self, t: str) -> int:
+    """The index of the step closest to the instant `t` (ERDDAP's rule for a value constraint; a tie takes the
+    earlier step)."""
+    x = datetime.fromisoformat(t.replace("Z", "+00:00"))
+    secs = [abs((datetime.fromisoformat(s.replace("Z", "+00:00")) - x).total_seconds()) for s in self.steps]
+    return secs.index(min(secs))
+
+  def slab_steps(self, var, i0, i1, la1, la0, lo0, lo1) -> bytes:
+    """The slab of an explicit axis: steps i0..i1 over the cells, `value(day, lat, lon)` per cell."""
+    times = self.steps[i0:i1 + 1]
+    lats = centres(la0, la1, -89.5, 89.5)[::-1]
+    lons = centres(lo0, lo1, -179.5, 179.5)
+    rows = [(t, la, lo) for t in times for la in lats for lo in lons]
+    tab = pa.table({
+      "time": pa.array([datetime.fromisoformat(t.replace("Z", "+00:00")) for t, _, _ in rows], pa.timestamp("ms", tz="UTC")),
+      "latitude": pa.array([r[1] for r in rows], pa.float32()),
+      "longitude": pa.array([r[2] for r in rows], pa.float32()),
+      var: pa.array([self.value(t[:10], la, lo) for t, la, lo in rows], pa.float64()),
+    })
+    sink = pa.BufferOutputStream()
+    pq.write_table(tab, sink)
+    return sink.getvalue().to_pybytes()
 
   def slab(self, var, d0, d1, la1, la0, lo0, lo1, asked: str = "") -> bytes:
     days = []

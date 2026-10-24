@@ -245,3 +245,50 @@ def test_two_engine_runs_of_one_slab_write_identical_bytes(tmp_path):
   for (sa, ea) in a.chunks_at:
     n = f"{sa[:10]}_{ea[:10]}.parquet"
     assert (Path(a.chunk_dir) / n).read_bytes() == (Path(b.chunk_dir) / n).read_bytes()
+
+
+# -- coarser grids than daily (the sanctuaries series, ledger week 6, 2026-10-24) -----------------------------------------
+def monthly_steps(y0: int, y1: int) -> list[str]:
+  """The first of every month at 00:00Z, as IMERG_monthly_global_precip's axis."""
+  return [f"{y}-{m:02d}-01T00:00:00Z" for y in range(y0, y1 + 1) for m in range(1, 13)]
+
+
+def eight_day_steps(first: str, n: int) -> list[str]:
+  """`n` steps 8 days apart at 12:00Z, as noaa_aoml_seascapes_8day's axis."""
+  from datetime import date, timedelta
+  d = date.fromisoformat(first)
+  return [f"{(d + timedelta(days=8 * i)).isoformat()}T12:00:00Z" for i in range(n)]
+
+
+def test_a_monthly_step_two_chunks_snap_onto_is_kept_once_from_the_chunk_that_holds_it(tmp_path):
+  # IMERG: 90 monthly steps a request (2,739 days at 30.4375 d a step); the first chunk ends on 2007-07-01, a step, asked
+  # at 12:00Z; the second starts 2007-07-02T12:00Z, which ERDDAP snaps back to the 2007-07-01T00:00Z step, so both
+  # chunks carry that month, and only the first chunk's span holds it
+  steps = monthly_steps(2000, 2009)
+  erd = FakeErddap(steps=steps, spacing="30 days 10h 30m 0s")
+  x = run(tmp_path, erd)
+  assert x.chunk_days == 2739
+  assert sorted(erd.slabs) == ["2000-01-01..2007-07-01", "2007-07-02..2009-12-01"]
+  second = pq.read_table(Path(x.chunk_dir) / "2007-07-02_2009-12-01.parquet").to_pylist()
+  assert second[0]["date"].isoformat() == "2007-07-01"                 # the snapped month is in the second chunk's rows
+  rows = x.stats.to_pylist()
+  assert x.rows == 120 and len(rows) == 120
+  assert [r["date"].isoformat() for r in rows] == [s[:10] for s in steps]
+  assert [r["date"].isoformat() for r in rows].count("2007-07-01") == 1
+  p = stats_provenance(x)
+  assert p["griddap_chunks"] == [["2000-01-01T00:00:00Z", "2007-07-01T12:00:00Z"],
+                                 ["2007-07-02T12:00:00Z", "2009-12-01T00:00:00Z"]]
+
+
+def test_an_8_day_step_snapped_into_the_next_chunk_is_kept_once(tmp_path):
+  # seascapes: 90 steps of 8 days = 720 days a request; the first chunk ends 2004-08-17, asked at 12:00Z, which ERDDAP
+  # snaps forward to the 2004-08-18 step, the second chunk's first day: that step is kept from the second chunk only
+  steps = eight_day_steps("2002-08-29", 100)
+  erd = FakeErddap(steps=steps, spacing="8 days")
+  x = run(tmp_path, erd)
+  assert x.chunk_days == 720
+  assert sorted(erd.slabs) == ["2002-08-29..2004-08-17", "2004-08-18..2004-10-29"]
+  first = pq.read_table(Path(x.chunk_dir) / "2002-08-29_2004-08-17.parquet").to_pylist()
+  assert first[-1]["date"].isoformat() == "2004-08-18"                 # outside the first chunk's span
+  rows = x.stats.to_pylist()
+  assert x.rows == 100 and [r["date"].isoformat() for r in rows] == [s[:10] for s in steps]
