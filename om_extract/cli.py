@@ -81,12 +81,18 @@ def _parser() -> argparse.ArgumentParser:
                   help="published (default): the published file's window; live: window(ext, 'all')")
   pa.add_argument("--tries", type=int, default=3, help="tries in a row without a new chunk before a place is given "
                                                        "up, resting 10, 30, 60, 120 min between (default 3)")
-  cp = sub.add_parser("compare", help="compare two stats files by the parity criterion; exit 1 when it fails",
+  cp = sub.add_parser("compare", help="compare two stats files by the parity criterion (the publish gate); exit 1 "
+                                      "when it fails",
                       description="Compare an engine's stats parquet with a published one row by row: every column but "
                                   "the sums exact, the sums within 1e-9 relative, the same keys and one row per key in "
                                   "the engine's file, and say whether the bytes are equal and why not.")
   cp.add_argument("engine", help="the engine's stats parquet (a path)")
-  cp.add_argument("ref", help="the published stats parquet (a path)")
+  cp.add_argument("ref", nargs="?", help="the published stats parquet (a path); leave it out only with --first-publish")
+  cp.add_argument("--allow-newer", action="store_true",
+                  help="the engine caught up: its rows dated after the published file's last date are set aside and "
+                       "listed, the rest must meet the criterion (a key only in either file on or before that date fails)")
+  cp.add_argument("--first-publish", action="store_true",
+                  help="there is no published file (no REF): the first publish, which passes")
   cp.add_argument("--json", help="also write the comparison to this JSON file")
   return p
 
@@ -175,7 +181,10 @@ def main(argv: list[str] | None = None) -> int:
     return 0
   if args.command == "compare":
     from om_extract.parity import compare_files, compare_text
-    res = compare_files(args.engine, args.ref)
+    if (args.ref is None) != args.first_publish:
+      print("error: give the published file REF, or --first-publish when there is none (not both)", file=sys.stderr)
+      return 2
+    res = compare_files(args.engine, args.ref, allow_newer=args.allow_newer)
     print(compare_text(res))
     if args.json:
       Path(args.json).write_text(json.dumps(res, indent=2, default=str) + "\n")

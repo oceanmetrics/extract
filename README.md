@@ -163,6 +163,9 @@ uv run om-extract parity --dataset dhw_5km --variable CRW_SST --place NMS:CINMS 
   --reference-chunks ~/actions-runner/erddap-places/_work/erddap-places/precompute-chunks --fetch all
 # two stats files by the criterion (exit 1 when it fails), e.g. a newly published file against the one it replaced
 uv run om-extract compare new/NMS:CINMS.parquet old/NMS:CINMS.parquet --json compare.json
+# the publish gate of indicators' requests.yml: the engine's newer days after the published last date are allowed
+uv run om-extract compare new/NMS:CINMS.parquet old/NMS:CINMS.parquet --allow-newer
+uv run om-extract compare new/NMS:CINMS.parquet --first-publish   # no published file yet: passes
 # every NMS: place, both variables: <out>/<variable>/parity_<place>.json and <out>/summary.md
 uv run om-extract parity --dataset dhw_5km --variable CRW_SST --variable CRW_BAA --place all --out parity/batch \
   --reference-chunks ~/actions-runner/erddap-places/_work/erddap-places/precompute-chunks --fetch last:3
@@ -177,6 +180,11 @@ uv run om-extract parity --dataset dhw_5km --variable CRW_SST --variable CRW_BAA
 | `--fetch all\|none\|last:N` | with `--reference-chunks`, which chunks the engine computes itself; the rest are copied from the runner's store |
 | `--window published\|live` | the published file's `start_date`..`end_date` (default), or `window(ext, 'all')` |
 | `--tries N` | tries in a row without a new chunk before a place is given up, resting 10, 30, 60 min between (default 3) |
+
+`om-extract compare` is the publish gate (`parity.gate()`): with `--allow-newer` the engine's rows dated after the
+published file's last date (the engine caught up) are set aside and listed, and the rest must meet the criterion, so a
+key only in the engine's file on or before that date (a middle day) fails, and so does any key only in the published
+file. A published file with no rows has no last date: an engine row against it fails. `--first-publish` (no REF) passes.
 
 It compares:
 

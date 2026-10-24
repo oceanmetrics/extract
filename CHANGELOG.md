@@ -1,3 +1,15 @@
+# om-extract 0.6.4 (2026-10-24)
+
+- The publish gate: `parity.gate(engine, ref, allow_newer=False)` and `split_newer()`. With `allow_newer` the engine's
+  rows dated after the published table's last date (the engine caught up) are set aside and listed as `newer_dates`,
+  and the rest must meet the criterion; a key only in the engine's table on or before that date (a missing middle day)
+  fails, as does any key only in the published table; `ref` None is the first publish and passes; a published table
+  with no rows has no last date, so an engine row against it fails. `compare_files(engine, ref, allow_newer=)` takes
+  `ref=None`, and `verdict_line()` is the one line a workflow prints.
+- `om-extract compare ENGINE [REF] --allow-newer --first-publish`: the gate of indicators' `requests.yml` (ledger
+  2026-10-24, week 1); `--first-publish` in place of REF when there is no published file; REF and `--first-publish`
+  together, or neither, exit 2. The text output adds a `window:` line under `--allow-newer`.
+
 # om-extract 0.6.3 (2026-10-23)
 
 - `om_extract.storage.DEFAULT_STORAGE_HOST` is now `STORAGE_HOST` (`https://storage.oceanmetrics.io`), flipped with

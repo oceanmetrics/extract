@@ -13,7 +13,7 @@ from fixtures_engine import collection, wkb
 from om_extract.engine import extract, provenance_text, stats_provenance
 from om_extract.cli import main
 from om_extract.parity import (ITEM_KEYS, SUM_REL, column_verdict, compare_bytes, compare_chunks, compare_files,
-                               compare_item, compare_provenance, compare_rows, reference_key_dir, rows_verdict,
+                               compare_item, gate, split_newer, verdict_line, compare_provenance, compare_rows, reference_key_dir, rows_verdict,
                                run_batch, run_parity, run_with_tries, seed_chunks, summary_markdown, ulps, verdict,
                                verdict_table)
 
@@ -173,6 +173,103 @@ def test_compare_on_files_exits_by_the_criterion(tmp_path, capsys):
   assert json.loads((tmp_path / "c.json").read_text())["verdict"]["pass"] is True
   assert main(["compare", str(tmp_path / "bad.parquet"), str(tmp_path / "ref.parquet")]) == 1
   assert "verdict: FAIL -> differs\n  max not exact" in capsys.readouterr().out
+
+
+# -- the publish gate (indicators requests.yml, ledger 2026-10-24): the engine's file may replace the published one ----
+D5 = [dt.date(2026, 1, d) for d in (1, 2, 3, 4, 5)]
+
+
+def s5(dates=D5, mean=None, mx=None):
+  # the values follow the date, so a table without a day keeps the other days' values
+  mean = mean or tuple(10.0 * d.day for d in dates)
+  mx = mx or tuple(10.0 * d.day + 1 for d in dates)
+  return stats(mean=mean, mx=mx, dates=dates, n=(6,) * len(dates))
+
+
+def test_gate_identical_tables_pass():
+  g = gate(s5(), s5(), allow_newer=True)
+  assert g["pass"] and g["reasons"] == [] and g["newer_dates"] == [] and g["ref_last"] == "2026-01-05"
+  assert g["rows_verdict"] == "exact" and not g["first_publish"]
+
+
+def test_gate_a_sum_1e10_relative_off_passes():
+  g = gate(s5(mean=(10.0, 20.0 * (1 + 1e-10), 30.0, 40.0, 50.0)), s5(), allow_newer=True)
+  assert g["pass"] and 0.9e-10 < g["verdict"]["sums_max_rel"] < 1.1e-10
+
+
+def test_gate_a_sum_1e8_relative_off_fails():
+  g = gate(s5(mean=(10.0, 20.0 * (1 + 1e-8), 30.0, 40.0, 50.0)), s5(), allow_newer=True)
+  assert not g["pass"] and g["reasons"] == ["mean: max rel 1e-08 > 1e-09"]
+
+
+def test_gate_an_exact_column_that_differs_fails():
+  g = gate(s5(mx=(11.0, 21.0, 31.5, 41.0, 51.0)), s5(), allow_newer=True)
+  assert not g["pass"] and g["reasons"] == ["max not exact (max 0.5 (140737488355328 ulp), 1 rows)"]
+
+
+def test_gate_newer_days_pass_with_allow_newer_and_are_listed():
+  # the engine caught up: two days after the published file's last date
+  g = gate(s5(), s5(dates=D5[:3]), allow_newer=True)
+  assert g["pass"] and g["newer_dates"] == ["2026-01-04", "2026-01-05"] and g["newer_rows"] == 2
+  assert g["ref_last"] == "2026-01-03" and g["rows"]["keys_only_engine"] == 0
+  assert g["rows_verdict"] == ("exact; 2 newer date(s) after the published 2026-01-03 "
+                               "(2026-01-04..2026-01-05, the engine caught up)")
+
+
+def test_gate_newer_days_fail_without_allow_newer():
+  g = gate(s5(), s5(dates=D5[:3]))
+  assert not g["pass"] and g["reasons"] == ["2 key(s) only in the engine's file (first ['2026-01-04'])"]
+
+
+def test_gate_a_middle_day_missing_from_the_engine_fails():
+  g = gate(s5(dates=[D5[0], D5[1], D5[3], D5[4]]), s5(), allow_newer=True)
+  assert not g["pass"] and g["reasons"] == ["1 key(s) only in the published file (first ['2026-01-03'])"]
+
+
+def test_gate_a_middle_day_missing_from_the_published_file_fails():
+  # a key only in the engine's file is allowed only after the published file's last date
+  g = gate(s5(), s5(dates=[D5[0], D5[1], D5[3], D5[4]]), allow_newer=True)
+  assert not g["pass"] and g["reasons"] == ["1 key(s) only in the engine's file (first ['2026-01-03'])"]
+  assert g["newer_dates"] == []
+
+
+def test_gate_an_engine_that_ends_earlier_fails():
+  g = gate(s5(dates=D5[:3]), s5(), allow_newer=True)
+  assert not g["pass"] and g["reasons"] == ["2 key(s) only in the published file (first ['2026-01-04'])"]
+
+
+def test_gate_no_published_file_is_the_first_publish_and_passes():
+  g = gate(s5(), None, allow_newer=True)
+  assert g["pass"] and g["first_publish"] and g["rows"] is None
+  assert verdict_line(g) == "verdict: PASS -> first publish (no published file; the engine's 5 rows)"
+
+
+def test_gate_an_empty_published_file_has_no_last_date_so_engine_rows_fail():
+  g = gate(s5(), s5().slice(0, 0), allow_newer=True)
+  assert not g["pass"] and g["ref_last"] is None and g["newer_dates"] == []
+  assert gate(s5().slice(0, 0), s5().slice(0, 0), allow_newer=True)["pass"]
+
+
+def test_split_newer_cuts_at_the_published_last_date():
+  win, newer, last = split_newer(s5(), s5(dates=D5[:2]))
+  assert last == dt.date(2026, 1, 2) and win.num_rows == 2 and newer["date"].to_pylist() == D5[2:]
+
+
+def test_compare_cli_allow_newer_and_first_publish(tmp_path, capsys):
+  pq.write_table(s5(dates=D5[:3]), tmp_path / "ref.parquet")
+  pq.write_table(s5(), tmp_path / "eng.parquet")
+  assert main(["compare", str(tmp_path / "eng.parquet"), str(tmp_path / "ref.parquet")]) == 1
+  capsys.readouterr()
+  assert main(["compare", str(tmp_path / "eng.parquet"), str(tmp_path / "ref.parquet"), "--allow-newer",
+               "--json", str(tmp_path / "c.json")]) == 0
+  out = capsys.readouterr().out
+  assert "window: the published file ends 2026-01-03; 2 engine row(s) after it, 2 date(s) set aside" in out
+  assert "verdict: PASS -> exact; 2 newer date(s)" in out
+  assert json.loads((tmp_path / "c.json").read_text())["newer_dates"] == ["2026-01-04", "2026-01-05"]
+  assert main(["compare", str(tmp_path / "eng.parquet"), "--first-publish", "--allow-newer"]) == 0
+  assert "verdict: PASS -> first publish" in capsys.readouterr().out
+  assert main(["compare", str(tmp_path / "eng.parquet")]) == 2
+  assert main(["compare", str(tmp_path / "eng.parquet"), str(tmp_path / "ref.parquet"), "--first-publish"]) == 2
 
 
 def test_ulps_counts_representable_doubles():

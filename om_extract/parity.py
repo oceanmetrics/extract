@@ -179,22 +179,83 @@ def rows_verdict(cmp: dict) -> str:
   return f"within the criterion ({sums}{dup})"
 
 
-def compare_files(engine_path: str | Path, ref_path: str | Path) -> dict:
-  """Two stats files by the criterion: `rows` (`compare_rows()`), `verdict` (`verdict()`), `rows_verdict` and
-  `bytes` (`compare_bytes()`)."""
-  rows = compare_rows(pq.read_table(engine_path), pq.read_table(ref_path))
-  return {"engine": str(engine_path), "ref": str(ref_path), "rows_verdict": rows_verdict(rows),
-          "verdict": verdict(rows), "rows": rows,
-          "bytes": compare_bytes(engine_path, ref_path, rows_exact=rows["exact"])}
+def split_newer(engine: pa.Table, ref: pa.Table) -> tuple[pa.Table, pa.Table, Any]:
+  """The engine's table cut at the published table's last `date`: `(window, newer, ref_last)`, where `window` holds
+  the engine's rows dated on or before `ref_last` and `newer` the rows after it. A published table with no rows has no
+  last date: every engine row stays in `window` (`ref_last` None), so an engine row there is a difference."""
+  import pyarrow.compute as pc
+  ref_last = pc.max(ref["date"]).as_py() if ref.num_rows else None
+  if ref_last is None or engine.num_rows == 0:
+    return engine, engine.slice(0, 0), ref_last
+  keep = pc.less_equal(engine["date"], pa.scalar(ref_last, engine.schema.field("date").type))
+  return engine.filter(keep), engine.filter(pc.invert(keep)), ref_last
+
+
+def gate(engine: pa.Table, ref: pa.Table | None, allow_newer: bool = False) -> dict:
+  """The publish gate over two stats tables: may the engine's table replace the published one?
+
+  - no published table (`ref` None): the first publish, PASS;
+  - else `verdict()` of `compare_rows()`. With `allow_newer`, the engine caught up: its rows dated after the published
+    table's last date are set aside first (`split_newer()`) and listed as `newer_dates`, and the rest must meet the
+    criterion, so a key only in the engine's table on or before that date (a middle day the published table lacks)
+    still fails, and so does any key only in the published table (a day the engine lost).
+
+  Returns `{"pass", "reasons", "first_publish", "allow_newer", "ref_last", "newer_rows", "newer_dates", "rows"
+  (compare_rows() or None), "verdict" (verdict() or the first publish's), "rows_verdict"}`."""
+  if ref is None:
+    v = {"pass": True, "reasons": [], "sums_max_rel": 0.0, "duplicate_keys_ref": 0}
+    return {"pass": True, "reasons": [], "first_publish": True, "allow_newer": allow_newer, "ref_last": None,
+            "newer_rows": 0, "newer_dates": [], "rows": None, "verdict": v,
+            "rows_verdict": f"first publish (no published file; the engine's {engine.num_rows} rows)"}
+  if allow_newer:
+    win, newer, ref_last = split_newer(engine, ref)
+  else:
+    win, newer, ref_last = engine, engine.slice(0, 0), None
+  rows = compare_rows(win, ref)
+  v = verdict(rows)
+  nd = sorted({str(d) for d in newer["date"].to_pylist()}) if newer.num_rows else []
+  rv = rows_verdict(rows)
+  if nd:
+    span = nd[0] if len(nd) == 1 else f"{nd[0]}..{nd[-1]}"
+    rv += (f"; {len(nd)} newer date(s) after the published {ref_last} ({span}"
+           + (", the engine caught up)" if v["pass"] else ", set aside)"))
+  return {"pass": v["pass"], "reasons": v["reasons"], "first_publish": False, "allow_newer": allow_newer,
+          "ref_last": None if ref_last is None else str(ref_last), "newer_rows": newer.num_rows, "newer_dates": nd,
+          "rows": rows, "verdict": v, "rows_verdict": rv}
+
+
+def compare_files(engine_path: str | Path, ref_path: str | Path | None, allow_newer: bool = False) -> dict:
+  """Two stats files by the gate (`gate()`): `rows` (`compare_rows()`), `verdict` (`verdict()`), `rows_verdict`,
+  `newer_dates` and `bytes` (`compare_bytes()` of the whole files). `ref_path` None is the first publish (no
+  published file): PASS, no rows or bytes compared."""
+  g = gate(pq.read_table(engine_path), None if ref_path is None else pq.read_table(ref_path), allow_newer)
+  rows_exact = g["rows"]["exact"] and not g["newer_rows"] if g["rows"] else None
+  return {"engine": str(engine_path), "ref": None if ref_path is None else str(ref_path), **g,
+          "bytes": None if ref_path is None else compare_bytes(engine_path, ref_path, rows_exact=rows_exact)}
+
+
+def verdict_line(res: dict) -> str:
+  """The one line a workflow prints: `verdict: PASS -> <rows verdict>` or `verdict: FAIL -> <rows verdict>: <reasons>`."""
+  v = res["verdict"]
+  return (f"verdict: {'PASS' if v['pass'] else 'FAIL'} -> {res['rows_verdict']}"
+          + ("" if v["pass"] else ": " + "; ".join(v["reasons"])))
 
 
 def compare_text(res: dict) -> str:
-  """`compare_files()` as text: the rows, one line per column, the bytes, the verdict."""
-  r, v, b = res["rows"], res["verdict"], res["bytes"]
-  lines = [f"{res['engine']}  vs  {res['ref']}",
-           f"rows: {r['rows_engine']} vs {r['rows_ref']}, {r['paired']} paired, keys only published "
-           f"{r['keys_only_ref']}, only engine {r['keys_only_engine']}, duplicated keys published "
-           f"{r['duplicate_keys_ref']}, engine {r['duplicate_keys_engine']}"]
+  """`compare_files()` as text: the window, the rows, one line per column, the bytes, the verdict."""
+  v, b = res["verdict"], res["bytes"]
+  lines = [f"{res['engine']}  vs  {res['ref'] or '(no published file)'}"]
+  if res.get("first_publish"):
+    lines.append(verdict_line(res))
+    return "\n".join(lines)
+  r = res["rows"]
+  if res.get("allow_newer"):
+    lines.append(f"window: the published file ends {res['ref_last']}; {res['newer_rows']} engine row(s) after it, "
+                 f"{len(res['newer_dates'])} date(s) set aside" + (f" ({', '.join(res['newer_dates'][:EXAMPLES])}"
+                 + (", ..." if len(res["newer_dates"]) > EXAMPLES else "") + ")" if res["newer_dates"] else ""))
+  lines.append(f"rows: {r['rows_engine']} vs {r['rows_ref']}, {r['paired']} paired, keys only published "
+               f"{r['keys_only_ref']}, only engine {r['keys_only_engine']}, duplicated keys published "
+               f"{r['duplicate_keys_ref']}, engine {r['duplicate_keys_engine']}")
   w = max([len(c) for c in r["columns"]] + [6])
   lines += [f"  {c:<{w}}  {column_verdict(col)}" for c, col in r["columns"].items()]
   lines.append(f"bytes: {'equal' if b['equal'] else 'differ'} ({b['bytes_engine']} vs {b['bytes_ref']})"
